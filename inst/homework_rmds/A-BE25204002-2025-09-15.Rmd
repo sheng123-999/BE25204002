@@ -1,0 +1,417 @@
+## Question
+
+Go through the book "R for Beginners" if you are not familiar with R programming
+
+## Answer
+作为一名R语言初学者，对“R for Beginners”进行阅读，并进行简单总结。
+
+1、R的功能与特点：
+
+（a）功能：统计分析、绘图。
+
+（b）特点：解释型语言，无需编写完整程序，输入命令后可直接执行。有着很好的数据可视化效果。
+  
+2、基本原理与基本使用规则：
+
+（a）R中所有变量、数据、函数、结果均以对象形式存储在内存中，操作本质是对对象的运算。
+
+（b）函数带“()”，无参数也需保留，如ls()。
+
+（c）n <- 10，表示将10赋值给n。
+
+（d）命名规则：以字母开头，可含数字、字母、.、_，对大小写敏感。
+
+3、R的数据操作
+
+（a）数据类型：数值型、字串型、逻辑型（默认输入的数字是double型）。
+
+（b）本章节主要以实例展示对象的创建与使用。
+
+4、R绘图
+
+（a）本章通过绘图管理->绘图函数->参数设置->实例四部分，介绍了从基础图表到自定义图形的绘图全流程。
+
+5、R的统计分析
+
+（a）以关于方差分析的简单例子引出对R统计分析功能的系统介绍。
+
+（b）介绍统计函数的核心参数————公式的含义。
+
+（c）介绍能适配不同对象的“智能函数”————泛型函数
+
+6、编程实践
+
+（a）介绍高效处理数据的方式：循环和向量化以及apply家族函数
+
+（b）介绍自定义函数
+
+通过“R for Beginners”的学习，对R整体有一定了解，关于各个对象、函数等目前仅以阅读为主，需要通过后续的课程学习、作业来加强实际编程能力。
+
+
+## Question
+
+Use knitr to produce at at least 3 examples where text is mixed with figures, tables and mathematical formulas.
+
+## Answer
+
+### Example 1: K-means聚类模型分析
+
+在运筹优化领域经常会面临处理大规模数据的情况，如果不对数据进行处理，算法运行往往会出现大量不必要的操作，因此可以依据特征对数据进行聚类操作，节省运行效率。
+
+#### 1.1 生成随机数据集
+
+生成含4个簇的三维数据集，用于K-means聚类。
+
+```{r, echo=FALSE}
+set.seed(42)
+
+cluster1 <- data.frame(
+  x = rnorm(100, mean = 1, sd = 1),
+  y = rnorm(100, mean = 1, sd = 1),
+  z = rnorm(100, mean = 1, sd = 1)
+)
+cluster2 <- data.frame(
+  x = rnorm(100, mean = 2, sd = 1),
+  y = rnorm(100, mean = 5, sd = 1),
+  z = rnorm(100, mean = 8, sd = 1)
+)
+cluster3 <- data.frame(
+  x = rnorm(100, mean = 6, sd = 1),
+  y = rnorm(100, mean = 7, sd = 1),
+  z = rnorm(100, mean = 3, sd = 1)
+)
+cluster4 <- data.frame(  # 已定义的第4个簇
+  x = rnorm(100, mean = 5, sd = 1),
+  y = rnorm(100, mean = 1, sd = 1),
+  z = rnorm(100, mean = 3, sd = 1)
+)
+
+kmeans_data <- rbind(cluster1, cluster2, cluster3, cluster4)
+kmeans_data$true_cluster <- factor(rep(1:4, each = 100))
+```
+
+```{r , echo=FALSE}
+knitr::kable(head(kmeans_data[, c("x", "y", "z")], 10), 
+             caption = "K-means聚类数据集（前10行，三维特征）")
+```
+
+#### 1.2 公式
+
+K-means的WCSS公式如下：
+$$
+\text{WCSS} = \sum_{k=1}^{K} \sum_{x \in C_k} \| x - \mu_k \|^2
+$$
+
+$$
+其中，K表示簇的个数；C_{k}表示第k个簇的所有样本；x表示单个样本的坐标；μ_{k}表示第k个簇的中心；
+$$
+$$
+目标是最小化样本到簇中心的“距离平方和”最小，WCSS越小，表示簇越紧凑。
+$$
+
+#### 1.3 结果分析
+
+```{r , include = FALSE}
+library(cluster)
+library(ggplot2)
+library(dplyr)
+
+kmeans_result <- kmeans(
+  x = kmeans_data[, c("x", "y", "z")],
+  centers = 4,
+  nstart = 20
+)
+
+kmeans_data <- kmeans_data %>%
+  mutate(
+    pred_cluster = factor(kmeans_result$cluster), 
+    true_cluster = factor(true_cluster)   
+  )
+
+cluster_centers <- as.data.frame(kmeans_result$centers) %>%
+  mutate(cluster = factor(1:4)) 
+```
+
+##### 1.3.1 模型系数
+
+```{r, echo=FALSE}
+cluster_size <- as.data.frame(table(kmeans_data$pred_cluster)) %>%
+  rename(簇标签 = Var1, 样本数 = Freq) %>%
+  mutate(簇标签 = as.character(簇标签))
+
+wcss_stats <- data.frame(
+  指标 = c("总WCSS", "簇1 WCSS", "簇2 WCSS", "簇3 WCSS", "簇4 WCSS"),
+  数值 = c(
+    kmeans_result$tot.withinss, 
+    kmeans_result$withinss[1], 
+    kmeans_result$withinss[2], 
+    kmeans_result$withinss[3],  
+    kmeans_result$withinss[4] 
+  ) %>% round(2) 
+)
+
+cluster_centers_table <- cluster_centers %>%
+  rename(簇标签 = cluster, x中心 = x, y中心 = y, z中心 = z)
+
+knitr::kable(cluster_size, caption = "各簇样本数量分布")
+knitr::kable(wcss_stats, caption = "K-means组内平方和（WCSS）统计")
+knitr::kable(cluster_centers_table, caption = "4个簇的中心坐标（三维特征均值）")
+```
+
+##### 1.3.2 拟合图像
+
+```{r , echo=FALSE}
+ggplot(kmeans_data, aes(x = x, y = y, color = pred_cluster, shape = true_cluster)) +
+  geom_point(size = 2, alpha = 0.7) +
+  geom_point(
+    data = cluster_centers, 
+    aes(x = x, y = y, color = cluster),
+    size = 5, shape = "X", color = "black"  # 固定黑色，与样本点区分
+  ) +
+  labs(
+    title = "K-means聚类结果（xy平面投影）",
+    subtitle = "颜色=预测簇标签，形状=真实簇标签",
+    x = "x特征", y = "y特征",
+    color = "预测簇", shape = "真实簇"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5), plot.subtitle = element_text(hjust = 0.5))
+```
+
+### Example 2: 线性规划问题
+
+#### 2.1 问题描述
+
+本实例是一个运筹优化领域中的线性规划问题：
+某公司生产两种产品，生产1个产品A需要消耗1个单位的资源、2个小时的人力，利润8万元；生产1个产品B需要消耗3个单位的资源、1个小时的人力，利润9万元；资源总量45单位，人力总工时最多52小时。
+
+\subsection{目标函数（最大化利润）}
+$$
+\max Z = 8x + 9y
+$$
+
+$$
+x + 3y \leq 45 \quad \text{（机器时间约束）} \\
+2x + y \leq 52 \quad \text{（人工时间约束）} \\
+x \geq 0,\ y \geq 0 \quad \text{（非负约束，产量不能为负）}
+$$
+
+
+#### 2.2 调用IpSolve求解
+```{r , echo=FALSE}
+library(lpSolve)
+
+obj <- c(8, 9)
+
+const.mat <- matrix(
+  c(1, 3,  # 机器时间约束：1*x + 3*y
+    2, 1), # 人工时间约束：2*x + 1*y
+  nrow = 2, byrow = TRUE
+)
+
+const.dir <- c("<=", "<=")
+
+const.rhs <- c(45, 52)
+
+lp_result <- lp(
+  direction = "max",
+  objective.in = obj,
+  const.mat = const.mat,
+  const.dir = const.dir,
+  const.rhs = const.rhs
+)
+
+cat("最优解状态：", lp_result$status, "(0表示找到最优解)\n")
+cat("最大利润：", lp_result$objval, "元\n")
+cat("产品A的最优产量：", lp_result$solution[1], "单位\n")
+cat("产品B的最优产量：", lp_result$solution[2], "单位\n")
+```
+
+#### 2.3 结果分析
+
+根据实际资源约束确定可解解范围，调用求解器求解最优解。
+
+```{r , echo=FALSE}
+library(ggplot2)
+library(lpSolve)
+
+lp_model <- lp(
+  direction = "max",
+  objective.in = c(8, 9),
+  const.mat = rbind(c(1, 3), c(2, 1)),
+  const.dir = c("<=", "<="),
+  const.rhs = c(45, 52)
+)
+
+optimal_solution <- data.frame(
+  x = lp_model$solution[1],
+  y = lp_model$solution[2],
+  profit = lp_model$objval
+)
+
+x_candidate <- seq(0, 25, by = 0.5) 
+y_candidate <- seq(0, 13, by = 0.5) 
+grid <- expand.grid(x = x_candidate, y = y_candidate)
+grid$profit <- 8 * grid$x + 9 * grid$y 
+grid$valid <- (grid$x + 3*grid$y <= 45) & (2*grid$x + grid$y <= 52)
+
+constraint_machine <- data.frame(
+  x = seq(0, 27, by = 0.1), 
+  y = (45 - seq(0, 27, by = 0.1)) / 3
+)
+constraint_machine <- constraint_machine[constraint_machine$y >=0 & constraint_machine$y <=16, ]
+
+constraint_labor <- data.frame(
+  x = seq(0, 27, by = 0.1),  
+  y = 52 - 2 * seq(0, 27, by = 0.1)
+)
+constraint_labor <- constraint_labor[constraint_labor$y >=0 & constraint_labor$y <=16, ]
+
+ggplot() +
+  geom_point(
+    data = grid,
+    aes(x = x, y = y, color = factor(valid), alpha = profit),
+    size = 2
+  ) +
+  geom_line(
+    data = constraint_machine,
+    aes(x = x, y = y, linetype = "机器时间约束: x + 3y = 45"),
+    color = "#2E86AB", linewidth = 1.2
+  ) +
+  geom_line(
+    data = constraint_labor,
+    aes(x = x, y = y, linetype = "人工时间约束: 2x + y = 52"),
+    color = "#A23B72", linewidth = 1.2
+  ) +
+  geom_point(
+    data = optimal_solution,
+    aes(x = x, y = y),
+    color = "#F18F01", size = 6, shape = "triangle", stroke = 1.5,
+    show.legend = FALSE  
+  ) +
+  scale_color_manual(
+    name = "生产组合有效性",
+    values = c("FALSE" = "#CCCCCC", "TRUE" = "#C73E1D"),
+    labels = c("无效组合（违反约束）", "有效组合（符合约束）")
+  ) +
+  scale_linetype_manual(
+    name = "资源约束边界",
+    values = c("机器时间约束: x + 3y = 45" = "solid", 
+               "人工时间约束: 2x + y = 52" = "dashed"),
+    labels = c("机器时间约束: x + 3y ≤ 45", "人工时间约束: 2x + y ≤ 52")
+  ) +
+  scale_alpha_continuous(
+    name = "总利润（元）",
+    range = c(0.4, 1),
+    guide = guide_legend()
+  ) +
+  labs(
+    title = "生产计划与利润的关系（含资源约束边界）",
+    subtitle = "三角=最优解 | 实线=机器时间约束 | 虚线=人工时间约束",
+    x = "产品A产量（单位）", 
+    y = "产品B产量（单位）"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 15, face = "bold"),
+    plot.subtitle = element_text(hjust = 0.5, size = 12, color = "#666666"),
+    legend.position = "bottom", 
+    legend.box = "vertical", 
+    legend.key.height = unit(1, "cm"),
+    legend.title = element_text(size = 11, face = "bold")
+  ) +
+  xlim(0, 27) +
+  ylim(0, 16)
+```
+
+### Example 3: 中心极限定理验证
+
+中心极限定理：无论总体服从何种分布，当样本量足够大时，样本均值的抽样分布会趋近于正态分布。
+
+#### 3.1 生成随机数据
+
+```{r , echo=FALSE}
+set.seed(123) 
+
+
+n_samples <- 10000 
+sample_size <- 30 
+
+results <- data.frame(
+  Distribution = character(),
+  Sample_Mean = numeric(),
+  stringsAsFactors = FALSE
+)
+
+uniform_means <- replicate(n_samples, mean(runif(sample_size, 0, 1)))
+results <- rbind(results, data.frame(
+  Distribution = "Uniform(0,1)",
+  Sample_Mean = uniform_means
+))
+
+exp_means <- replicate(n_samples, mean(rexp(sample_size, rate = 1)))
+results <- rbind(results, data.frame(
+  Distribution = "Exponential(1)",
+  Sample_Mean = exp_means
+))
+
+binom_means <- replicate(n_samples, mean(rbinom(sample_size, size = 10, prob = 0.3)))
+results <- rbind(results, data.frame(
+  Distribution = "Binomial(10,0.3)",
+  Sample_Mean = binom_means
+))
+
+theoretical_params <- data.frame(
+  Distribution = c("Uniform(0,1)", "Exponential(1)", "Binomial(10,0.3)"),
+  Mean = c(0.5, 1, 3),
+  SD = c(sqrt(1/12)/sqrt(sample_size), 1/sqrt(sample_size), sqrt(10*0.3*0.7)/sqrt(sample_size))
+)
+
+knitr::kable(theoretical_params, caption = "样本均值的理论正态分布参数")
+```
+
+#### 3.2 公式
+$$
+\bar{X} \sim N\left(\mu, \frac{\sigma^2}{n}\right) \quad \text{当} \quad n \to \infty
+$$
+$$
+其中：
+bar{X} 是样本均值，
+μ是总体均值，
+sigma^2是总体方差，
+n是样本容量
+$$
+
+#### 3.3 结果分析
+
+根据图像展示，尽管原始数据总体不是正态分布，但是样本均值的分布与理论正态分布高度吻合，验证了结论。
+
+```{r , echo=FALSE}
+par(mfrow = c(3, 1), mar = c(4, 4, 2, 1))
+
+create_plot <- function(data, dist_name, mean_val, sd_val) {
+  hist(data$Sample_Mean, breaks = 30, freq = FALSE, 
+       main = paste("分布:", dist_name),
+       xlab = "样本均值", ylab = "密度", col = "lightblue", border = "white")
+  
+  curve(dnorm(x, mean = mean_val, sd = sd_val), 
+        add = TRUE, col = "red", lwd = 2)
+
+  lines(density(data$Sample_Mean), col = "blue", lwd = 2)
+  
+  legend("topright", 
+         legend = c("理论正态分布", "核密度估计"), 
+         col = c("red", "blue"), lwd = 2, bty = "n")
+}
+
+create_plot(subset(results, Distribution == "Uniform(0,1)"), 
+            "均匀分布(0,1)", 0.5, sqrt(1/12)/sqrt(sample_size))
+
+create_plot(subset(results, Distribution == "Exponential(1)"), 
+            "指数分布(λ=1)", 1, 1/sqrt(sample_size))
+
+create_plot(subset(results, Distribution == "Binomial(10,0.3)"), 
+            "二项分布(n=10,p=0.3)", 3, sqrt(10*0.3*0.7)/sqrt(sample_size))
+
+par(mfrow = c(1, 1))
+```

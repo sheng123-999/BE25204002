@@ -1,0 +1,10 @@
+test_data <- list(
+  tasks = tasks,
+  self_resource = self_resource,
+  outsourced_resource = outsourced_resource,
+  resource_windows = resource_windows,
+  resource_joint_cost = resource_joint_cost,
+  resource_mapping = resource_mapping
+)
+
+save(test_data, file = "data/test_data.RData", compress = "xz")

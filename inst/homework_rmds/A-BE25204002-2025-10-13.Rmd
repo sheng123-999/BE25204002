@@ -1,0 +1,255 @@
+## Question
+
+Exercises 6.15(page 180) and 7.3, 7.6, 7.A (page 209-210, Statistical Computing with R, 2nd edition).
+
+## Answer
+
+## 1 问题一（6.15）
+
+6.15 Obtain the stratified importance sampling estimate in Example 6.14 and compare it with the result of Example 6.11.
+
+### 1.1 问题分析
+
+这个问题要求：
+估计积分，通过分层重要性抽样方法计算其估计值，并与例 6.11 中普通重要性抽样的结果比较，验证分层对估计精度（方差）的提升效果。
+
+分层重要性抽样的核心是通过划分区间降低估计方差。设目标积分为 $\theta = \int_0^1 \frac{e^{-x}}{1+x^2}dx$，将区间 $[0,1]$ 分为 $k$ 层（本题 $k=5$），第 $j$ 层区间为 $[c_{j-1}, c_j)$（$c_j = j/5$）。  
+
+各层的抽样概率为：  
+$$p_j = \int_{c_{j-1}}^{c_j} g(x)dx \quad \text{（其中 } g(x) = \frac{5}{1-e^{-1}}e^{-x} \text{ 为重要性抽样密度）}$$  
+
+第 $j$ 层的估计量为 $\hat{\theta}_j = \frac{1}{n_j}\sum_{i=1}^{n_j} \frac{h(x_{ji})}{g(x_{ji})}$（$h(x) = \frac{1}{1+x^2}$ 为目标函数与抽样密度的比值），总体估计量为：  
+$$\hat{\theta}_{\text{strat}} = \sum_{j=1}^k p_j \hat{\theta}_j$$  
+
+该公式通过分层加权整合各层局部估计，理论上比非分层估计具有更低的方差（因每层内变异更小）。
+
+### 1.2 编程实现
+
+```{r 6.15, echo=TRUE}
+
+set.seed(615)  
+n_total <- 10000 
+n_layers <- 5    
+n_per_layer <- n_total / n_layers 
+
+layers <- lapply(0:4, function(j) c(j/5, (j+1)/5))
+
+p <- sapply(0:4, function(j) {
+  lower <- j/5
+  upper <- (j+1)/5
+  5 / (1 - exp(-1)) * (exp(-lower) - exp(-upper))
+})
+
+theta_hat_layers <- numeric(n_layers)
+se_layers <- numeric(n_layers)     
+
+for (j in 0:4) {
+  lower <- j/5
+  upper <- (j+1)/5
+
+  u <- runif(n_per_layer)
+  x <- -log(exp(-lower) - u * (1 - exp(-1)) / 5)
+
+  w <- (1 - exp(-1)) / (5 * (1 + x^2))
+  
+  theta_hat_layers[j+1] <- mean(w)
+  se_layers[j+1] <- sd(w) / sqrt(n_per_layer)
+}
+
+theta_hat_strat <- sum(p * theta_hat_layers)
+se_strat <- sqrt(sum((p^2) * (se_layers^2)))
+
+theta_611 <- 0.5257801
+se_611 <- 0.0970314
+
+true_value <- integrate(function(x) exp(-x)/(1 + x^2), 0, 1)$value
+
+cat("分层重要性抽样估计: ", round(theta_hat_strat, 6), "\n")
+cat("分层重要性抽样标准误差: ", round(se_strat, 6), "\n")
+cat("例6.11（f3）的估计: ", theta_611, ", 标准误差: ", se_611, "\n")
+cat("真实值（数值积分）: ", round(true_value, 6), "\n")
+    
+```
+
+### 1.3 结果分析
+
+分层重要性抽样的标准误差通常会小于非分层的重要性抽样，说明分层通过 “局部更优匹配” 进一步降低了方差，提升了估计精度。
+
+## 2 问题二（7.3）
+
+7.3 Plot the power curves for the t-test in Example 7.9 for sample sizes 10, 20, 30, 40, and 50, but omit the standard error bars. Plot the curves on the same graph, each in a different color or different line type, and include a legend. Comment on the relation between power and sample size.
+
+### 2.1 问题分析
+
+这道题围绕例 7.9 中的单样本 t 检验展开，需要：
+
+（1）模拟不同备择均值μ下 t 检验的经验功效；
+
+（2）绘制功效曲线：将不同样本量的功效曲线整合到同一图中，用颜色 / 线型区分，添加图例，且省略标准误差线。
+
+（3）分析关系：解释样本量与功效之间的关联规律。
+
+功效的定义为“备择假设为真时正确拒绝原假设的概率”，即：  
+$$\text{Power} = P(\text{拒绝 } H_0 \mid H_1 \text{ 为真})$$  
+
+对单样本t检验（$H_0: \mu = \mu_0$，$H_1: \mu > \mu_0$），检验统计量为：  
+$$t = \frac{\bar{X} - \mu_0}{S/\sqrt{n}} \sim t(n-1, \delta)$$  
+
+其中 $\delta = \frac{\mu_1 - \mu_0}{\sigma/\sqrt{n}}$ 为非中心参数（$\mu_1$ 为备择均值）。当 $\alpha=0.05$ 时，功效可表示为：  
+$$\text{Power} = P(t \geq t_{0.05, n-1} \mid \delta)$$  
+
+可见，样本量 $n$ 越大，非中心参数 $\delta$ 越大，功效越高（这与模拟中“样本量增加，功效曲线上升”一致）。
+
+### 2.2 编程实现
+
+```{r 7.3, echo=TRUE}
+library(ggplot2)
+m <- 1000     
+mu0 <- 500     
+sigma <- 100   
+mu_seq <- seq(450, 650, 10) 
+sample_sizes <- c(10, 20, 30, 40, 50) 
+power_results <- list() 
+
+for (n in sample_sizes) {
+  power_n <- numeric(length(mu_seq))
+  for (i in seq_along(mu_seq)) {
+    mu_i <- mu_seq[i]
+    p_values <- replicate(m, {
+      x <- rnorm(n, mean = mu_i, sd = sigma)
+      t.test(x, alternative = "greater", mu = mu0)$p.value
+    })
+    power_n[i] <- mean(p_values <= 0.05)
+  }
+  power_results[[as.character(n)]] <- power_n
+}
+
+plot_df <- data.frame(
+  mu = rep(mu_seq, length(sample_sizes)),
+  sample_size = factor(rep(sample_sizes, each = length(mu_seq))),
+  power = unlist(power_results)
+)
+ggplot(plot_df, aes(x = mu, y = power, color = sample_size, linetype = sample_size)) +
+  geom_line(linewidth = 1) +
+  labs(
+    x = "备择均值 μ", 
+    y = "功效 (Power)", 
+    title = "不同样本量下t检验的功效曲线"
+  ) +
+  theme_minimal() +
+  scale_color_manual(values = c("red", "blue", "green", "purple", "orange"))
+  
+```
+
+### 2.3 结果分析
+
+当其他条件（如效应量、显著性水平）固定时，样本量越大，t 检验的功效越高。这是因为更大的样本量降低了抽样变异性，能更精准地捕捉到 “原假设与真实均值的差异”，从而提高正确拒绝错误原假设的概率。
+
+## 3 问题三（7.6）
+
+7.6 Suppose a 95% symmetric t-interval is applied to estimate a mean but the sample data are non-normal. Then the probability that the confidence interval covers the mean is not necessarily equal to 0.95. Use a Monte Carlo experiment to estimate the coverage probability of the t-interval for random samples of χ²(2) data with sample size n = 20. Compare your t-interval results with the simulation results in Example 7.4. (The t-interval should be more robust to departures from normality than the interval for variance.)
+
+### 3.1 问题分析
+
+这个问题要求：
+验证非正态（\(\chi^2(2)\)分布）下，t 置信区间的覆盖概率（置信区间包含真实均值的比例）是否接近名义置信水平（95%）
+
+重复生成大量（如 10000 次）\(\chi^2(2)\)分布的样本（样本量\(n=20\)），每次计算 t 置信区间，统计 “区间包含真实均值” 的次数占比
+
+将 t 区间的覆盖概率与例 7.4（可能涉及 “方差的置信区间”，对方差的区间估计对非正态更敏感）的结果比较，验证 t 区间更稳健。
+
+单样本t置信区间（95%置信水平）的构造公式为：  
+$$\left[ \bar{X} - t_{0.025, n-1} \cdot \frac{S}{\sqrt{n}}, \bar{X} + t_{0.025, n-1} \cdot \frac{S}{\sqrt{n}} \right]$$  
+
+其中 $\bar{X}$ 为样本均值，$S$ 为样本标准差，$t_{0.025, n-1}$ 是自由度为 $n-1$ 的t分布双侧2.5%分位数。  
+
+覆盖概率定义为区间包含总体真实均值 $\mu$ 的概率：  
+$$P\left( \bar{X} - t_{0.025, n-1} \cdot \frac{S}{\sqrt{n}} \leq \mu \leq \bar{X} + t_{0.025, n-1} \cdot \frac{S}{\sqrt{n}} \right)$$  
+
+当样本量中等（如 $n=20$），即使总体非正态（如 $\chi^2(2)$），中心极限定理使 $\bar{X}$ 近似正态，因此覆盖概率仍接近95%（体现t区间的稳健性）。
+
+### 3.2 编程实现
+
+```{r 7.6, echo=TRUE}
+n <- 20         
+m <- 10000     
+conf_level <- 0.95 
+mu_true <- 2    
+
+coverage <- logical(m)
+
+for (i in 1:m) {
+  sample_data <- rchisq(n, df = 2)
+  t_interval <- t.test(sample_data)$conf.int
+  coverage[i] <- (mu_true >= t_interval[1]) & (mu_true <= t_interval[2])
+}
+
+coverage_prob <- mean(coverage)
+cat("t置信区间的覆盖概率估计值：", round(coverage_prob, 4), "\n")    
+
+```
+
+### 3.3 结果分析
+典型结果（如模拟 10000 次）的覆盖概率接近 0.95，这说明：即使总体为非正态的\(\chi^2(2)\)分布，t 置信区间的实际覆盖概率仍与名义水平（95%）较为接近，体现了 t 区间对非正态的稳健性（与例 7.4 中方差区间的覆盖概率相比，t 区间更接近名义水平）。
+
+
+## 4 问题四（7.A）
+
+7.A Use Monte Carlo simulation to investigate whether the empirical Type I error rate of the \( t \)-test is approximately equal to the nominal significance level \( \alpha \), when the sampled population is non-normal. The \( t \)-test is robust to mild departures from normality. Discuss the simulation results for the cases where the sampled population is (i) \( \chi^2(1) \), (ii) \( \text{Uniform}(0,2) \), and (iii) \( \text{Exponential}(\text{rate}=1) \). In each case, test \( H_0: \mu = \mu_0 \) vs \( H_1: \mu \neq \mu_0 \), where \( \mu_0 \) is the mean of \( \chi^2(1) \), \( \text{Uniform}(0,2) \), and \( \text{Exponential}(1) \), respectively.
+
+### 4.1 问题分析
+
+关于这个问题我需要确定各分布的均值，对每种非正态分布尝试蒙特卡洛模拟流程。统计 “错误拒绝原假设” 的比例（经验第一类错误率），并与α比较，分析t检验对非正态的稳健性。 
+
+Ⅰ类错误率的定义为“原假设为真时错误拒绝的概率”，即：  
+$$\alpha = P(\text{拒绝 } H_0 \mid H_0 \text{ 为真})$$  
+
+对t检验，当 $H_0: \mu = \mu_0$ 为真时，检验统计量：  
+$$t = \frac{\bar{X} - \mu_0}{S/\sqrt{n}} \sim t(n-1) \quad \text{（中心t分布）}$$  
+
+理论上，拒绝域满足 $P(|t| \geq t_{\alpha/2, n-1} \mid H_0) = \alpha$。但在非正态总体下，该理论保证不严格成立，需通过模拟验证经验错误率是否仍接近 $\alpha$（即t检验的稳健性）。
+
+### 4.2 编程实现
+
+```{r 7.A, echo=TRUE}
+n <- 30  
+m <- 10000  
+alpha <- 0.05  
+
+empirical_errors <- list()
+
+mu0_chi <- 1 
+reject_chi <- numeric(m)  
+for (i in 1:m) {
+  x <- rchisq(n, df = 1) 
+  ttest <- t.test(x, mu = mu0_chi, alternative = "two.sided")
+  reject_chi[i] <- (ttest$p.value <= alpha) 
+}
+empirical_errors[["Chi-squared(1)"]] <- mean(reject_chi)
+
+mu0_unif <- 1 
+reject_unif <- numeric(m)
+for (i in 1:m) {
+  x <- runif(n, min = 0, max = 2) 
+  ttest <- t.test(x, mu = mu0_unif, alternative = "two.sided")
+  reject_unif[i] <- (ttest$p.value <= alpha)
+}
+empirical_errors[["Uniform(0,2)"]] <- mean(reject_unif)
+
+mu0_exp <- 1  # Exponential(rate=1)的均值
+reject_exp <- numeric(m)
+for (i in 1:m) {
+  x <- rexp(n, rate = 1)  
+  ttest <- t.test(x, mu = mu0_exp, alternative = "two.sided")
+  reject_exp[i] <- (ttest$p.value <= alpha)
+}
+empirical_errors[["Exponential(rate=1)"]] <- mean(reject_exp)
+
+print(empirical_errors)
+    
+```
+
+### 4.3 结果分析
+
+三种非正态分布下，经验第一类错误率均接近 0.05（名义显著性水平）。这说明：即使总体非正态，只要样本量不是特别小（如\(n=30\)），t 检验对 “轻微至中度的非正态” 是稳健的—— 实际第一类错误率与名义水平\(\alpha\)基本一致。其中，均匀分布（对称非正态）的结果最接近 0.05；偏态分布（\(\chi^2(1)\)、指数分布）的结果也未明显偏离，体现了 t 检验的稳健性。
+

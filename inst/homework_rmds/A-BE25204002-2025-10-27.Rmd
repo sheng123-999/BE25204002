@@ -1,0 +1,295 @@
+## Question
+
+Exercises 8.8, 8.11, 8.A (page 241, Statistical Computing with R, 2nd edition).
+
+Suppose the population has the exponential distribution with rate $\lambda$, then the MLE of $\lambda$ is $\hat\lambda=1\big/\bar X,$ where $\bar X$ is the sample mean. It can be derived that the expectation of $\hat\lambda$ is $\mathbb{E}[\hat\lambda\,]=\frac{n\lambda}{n-1},$ so that the estimation bias is $\text{Bias}(\hat\lambda)=\frac{\lambda}{n-1}.$ The standard error of $\hat\lambda$ is $\text{SE}(\hat\lambda)=\frac{\lambda\,n}{(n-1)\sqrt{n-2}}.$ Conduct a simulation study to verify the performance of the bootstrap method.
+
+The true value of $\lambda=2$. 
+
+The sample size $n=5,10,20$. 
+
+The number of bootstrap replicates $B=1000$.
+
+Repeat simulations for $m=1000$ times. 
+
+Compare the mean bootstrap bias and bootstrap standard error with the theoretical ones. Comment on the results.
+
+## Answer
+
+## 1 问题一（8.8）
+
+\textbf{8.8} Refer to Exercise 8.7. Obtain the jackknife estimates of bias and standard error of $\hat\lambda$.
+
+### 1.1 问题分析
+
+该问题需要利用Jackknife（刀切法）来估计\(\hat{\lambda}\)的偏差和标准误。
+Jackknife 的核心是通过依次删除每个观测值，生成 “伪值（jackknife replicates）”，再基于伪值推导偏差和标准误：全样本估计：计算全样本的\(\hat{\lambda}\)，记为\(\lambda_{\text{full}}\)。生成伪值：对每个\(i=1,2,\dots,n\)（n为样本量），删除第i个观测，计算剩余样本的\(\hat{\lambda}\)，记为\(\lambda_{(i)}\)。伪值定义为：\(\theta_i = n \cdot \lambda_{\text{full}} - (n-1) \cdot \lambda_{(i)}\)偏差估计：公式为\(\text{bias}_{\text{jack}} = (n-1) \cdot \left( \bar{\theta}_{\text{jack}} - \lambda_{\text{full}} \right)\)其中\(\bar{\theta}_{\text{jack}} = \frac{1}{n} \sum_{i=1}^n \theta_i\)。标准误估计：公式为\(\text{se}_{\text{jack}} = \sqrt{(n-1) \cdot \text{var}(\theta_{\text{jack}})}\)其中\(\text{var}(\theta_{\text{jack}})\)是伪值\(\theta_1, \theta_2, \dots, \theta_n\)的样本方差。
+
+### 1.2 编程实现
+
+```{r 8.8, echo=TRUE}
+
+set.seed(10311588)
+patch_data <- rnorm(n = 10, mean = 2, sd = 0.5)
+n <- length(patch_data)
+
+lambda_hat <- function(data) {
+  mean(data)
+}
+
+
+lambda_full <- lambda_hat(patch_data)
+
+theta_jack <- numeric(n)
+for (i in 1:n) {
+  data_leave_out <- patch_data[-i] 
+  lambda_i <- lambda_hat(data_leave_out) 
+  theta_jack[i] <- n * lambda_full - (n - 1) * lambda_i 
+}
+
+bias_jack <- (n - 1) * (mean(theta_jack) - lambda_full)
+
+se_jack <- sqrt((n - 1) * mean((theta_jack - mean(theta_jack))^2))
+
+cat("Jackknife偏差估计: ", bias_jack, "\n")
+cat("Jackknife标准误估计: ", se_jack, "\n")
+    
+```
+
+### 1.3 结果分析
+
+偏差近乎为 0，说明\(\hat{\lambda}\)无明显系统偏差，估计稳定性强；标准误有效反映了\(\hat{\lambda}\)的抽样变异性，结果符合 Jackknife 方法的数学逻辑。
+
+## 2 问题二（8.11）
+
+\textbf{8.11} In Example 8.17, leave-one-out (\( n \)-fold) cross-validation was used to select the best fitting model. Use leave-two-out cross-validation to compare the models.
+
+### 2.1 问题分析
+
+需要基于 “留二法交叉验证” 重新评估 Example 8.17 中的四个模型，计算每个模型的平均预测误差（如均方误差 MSE），并根据误差大小选择最优模型。
+
+留二法是留一法的扩展：每次从数据中删除 2 个观测，用剩余的\(n-2\)个观测拟合模型；用拟合的模型预测被删除的 2 个观测，计算预测误差；遍历所有可能的 “删除 2 个观测” 的组合（组合数为\(\binom{n}{2} = \frac{n(n-1)}{2}\)）；最终计算每个模型的平均平方误差（MSE），MSE 最小的模型为最优。
+
+### 2.2 编程实现
+
+```{r 8.11, echo=TRUE}
+
+library(DAAG)
+data(ironslag)
+magnetic <- ironslag$magnetic
+chemical <- ironslag$chemical
+n <- length(magnetic)
+
+e1 <- e2 <- e3 <- e4 <- numeric(choose(n, 2))
+idx <- 1
+
+for (k in 1:(n-1)) {
+  for (l in (k+1):n) {
+    train_y <- magnetic[-c(k, l)]
+    train_x <- chemical[-c(k, l)]
+    
+    #模型1
+    model1 <- lm(train_y ~ train_x)
+    yhat1_k <- coef(model1)[1] + coef(model1)[2] * chemical[k]
+    yhat1_l <- coef(model1)[1] + coef(model1)[2] * chemical[l]
+    e1[idx] <- (magnetic[k] - yhat1_k)^2 + (magnetic[l] - yhat1_l)^2
+    
+    #模型2
+    model2 <- lm(train_y ~ train_x + I(train_x^2))
+    yhat2_k <- coef(model2)[1] + coef(model2)[2] * chemical[k] + coef(model2)[3] * chemical[k]^2
+    yhat2_l <- coef(model2)[1] + coef(model2)[2] * chemical[l] + coef(model2)[3] * chemical[l]^2
+    e2[idx] <- (magnetic[k] - yhat2_k)^2 + (magnetic[l] - yhat2_l)^2
+    
+    #模型3
+    model3 <- lm(log(train_y) ~ train_x)
+    logyhat3_k <- coef(model3)[1] + coef(model3)[2] * chemical[k]
+    yhat3_k <- exp(logyhat3_k)
+    logyhat3_l <- coef(model3)[1] + coef(model3)[2] * chemical[l]
+    yhat3_l <- exp(logyhat3_l)
+    e3[idx] <- (magnetic[k] - yhat3_k)^2 + (magnetic[l] - yhat3_l)^2
+    
+    #模型4
+    model4 <- lm(log(train_y) ~ log(train_x))
+    logyhat4_k <- coef(model4)[1] + coef(model4)[2] * log(chemical[k])
+    yhat4_k <- exp(logyhat4_k)
+    logyhat4_l <- coef(model4)[1] + coef(model4)[2] * log(chemical[l])
+    yhat4_l <- exp(logyhat4_l)
+    e4[idx] <- (magnetic[k] - yhat4_k)^2 + (magnetic[l] - yhat4_l)^2
+    
+    idx <- idx + 1
+  }
+}
+
+mse1 <- mean(e1)
+mse2 <- mean(e2)
+mse3 <- mean(e3)
+mse4 <- mean(e4)
+
+cat("四个模型的留二法MSE：\n")
+cat("模型1（线性）：", mse1, "\n")
+cat("模型2（二次）：", mse2, "\n")
+cat("模型3（对数线性）：", mse3, "\n")
+cat("模型4（双对数）：", mse4, "\n")
+    
+```
+
+### 2.3 结果分析
+
+在 Example 8.17 的留一法交叉验证中，模型 2 的 MSE 也是最小的（17.85）。本次留二法的结果与其结论一致，进一步验证了二次模型是该数据集的最佳拟合模型，说明模型选择具有稳定性。
+
+## 3 问题三（8.A）
+
+\textbf{8.A} Conduct a Monte Carlo study to estimate the coverage probabilities of the standard normal bootstrap confidence interval, the basic bootstrap confidence interval, and the percentile confidence interval. Sample from a normal population and check the empirical coverage rates for the sample mean. Find the proportion of times that the confidence intervals miss on the left, and the proportion of times that the confidence intervals miss on the right.
+
+### 3.1 问题分析
+
+需要通过蒙特卡洛模拟来估计三种自助法（Bootstrap）置信区间的覆盖概率，以及它们在左侧和右侧的失误比例。
+
+从正态总体中抽样，针对样本均值这一统计量，进行蒙特卡洛模拟。
+估计三种自助置信区间的覆盖概率（即置信区间包含真实参数的频率）：
+标准正态自助置信区间（Normal Bootstrap CI）
+基本自助置信区间（Basic Bootstrap CI）
+分位数自助置信区间（Percentile Bootstrap CI）
+计算每个置信区间左侧失误比例（真实值在区间左边的频率）和右侧失误比例（真实值在区间右边的频率）。
+
+### 3.2 编程实现
+
+```{r 8.A, echo=TRUE}
+
+set.seed(1031158)  
+M <- 1000     
+n <- 20       
+B <- 1000    
+alpha <- 0.05  
+z <- qnorm(1 - alpha/2)  
+
+cover_normal <- cover_basic <- cover_percentile <- logical(M)
+left_miss_normal <- left_miss_basic <- left_miss_percentile <- numeric(M)
+right_miss_normal <- right_miss_basic <- right_miss_percentile <- numeric(M)
+
+for (m in 1:M) {
+  x <- rnorm(n)
+  x_bar <- mean(x) 
+  
+  theta_star <- replicate(B, mean(sample(x, n, replace = TRUE)))
+  
+  se_star <- sd(theta_star)
+  ci_normal_lower <- x_bar - z * se_star
+  ci_normal_upper <- x_bar + z * se_star
+  
+  q_lower <- quantile(theta_star, alpha/2)
+  q_upper <- quantile(theta_star, 1 - alpha/2)
+  ci_basic_lower <- 2 * x_bar - q_upper
+  ci_basic_upper <- 2 * x_bar - q_lower
+  
+  ci_percentile_lower <- q_lower
+  ci_percentile_upper <- q_upper
+  
+  cover_normal[m] <- (0 >= ci_normal_lower) & (0 <= ci_normal_upper)
+  left_miss_normal[m] <- (0 < ci_normal_lower)
+  right_miss_normal[m] <- (0 > ci_normal_upper)
+  
+  cover_basic[m] <- (0 >= ci_basic_lower) & (0 <= ci_basic_upper)
+  left_miss_basic[m] <- (0 < ci_basic_lower)
+  right_miss_basic[m] <- (0 > ci_basic_upper)
+  
+  cover_percentile[m] <- (0 >= ci_percentile_lower) & (0 <= ci_percentile_upper)
+  left_miss_percentile[m] <- (0 < ci_percentile_lower)
+  right_miss_percentile[m] <- (0 > ci_percentile_upper)
+}
+
+result <- data.frame(
+  Method = c("标准正态自助区间", "基本自助区间", "分位数自助区间"),
+  Coverage = c(mean(cover_normal), mean(cover_basic), mean(cover_percentile)),
+  Left_Miss = c(mean(left_miss_normal), mean(left_miss_basic), mean(left_miss_percentile)),
+  Right_Miss = c(mean(right_miss_normal), mean(right_miss_basic), mean(right_miss_percentile))
+)
+
+print(result)
+    
+```
+
+### 3.3 结果分析
+
+三种自助置信区间在 “正态总体小样本（n=20）+ 样本均值” 场景下，实际覆盖概率（91.7%~92.4%）虽低于 95% 名义水平，但差距在可接受范围内（2~3 个百分点），且无严重偏倚，整体表现稳健。
+
+## 4 问题四
+
+Suppose the population has the exponential distribution with rate $\lambda$, then the MLE of $\lambda$ is $\hat\lambda=1\big/\bar X,$ where $\bar X$ is the sample mean. It can be derived that the expectation of $\hat\lambda$ is $\mathbb{E}[\hat\lambda\,]=\frac{n\lambda}{n-1},$ so that the estimation bias is $\text{Bias}(\hat\lambda)=\frac{\lambda}{n-1}.$ The standard error of $\hat\lambda$ is $\text{SE}(\hat\lambda)=\frac{\lambda\,n}{(n-1)\sqrt{n-2}}.$ Conduct a simulation study to verify the performance of the bootstrap method.
+
+The true value of $\lambda=2$. 
+
+The sample size $n=5,10,20$. 
+
+The number of bootstrap replicates $B=1000$.
+
+Repeat simulations for $m=1000$ times. 
+
+Compare the mean bootstrap bias and bootstrap standard error with the theoretical ones. Comment on the results.
+
+### 4.1 问题分析
+
+需通过蒙特卡洛模拟 + Bootstrap 重抽样，针对指数分布（λ=2）的 MLE 估计量\(\hat{\lambda}=1/\bar{X}\)，在 3 种样本量（n=5,10,20）下，验证 Bootstrap 方法估计的平均偏差和平均标准误与理论值的一致性，最终分析样本量对 Bootstrap 估计精度的影响。
+
+### 4.2 编程实现
+
+```{r 10.27, echo=TRUE}
+
+set.seed(1031151027) 
+
+lambda_true <- 2   
+n_list <- c(5, 10, 20)  
+B <- 1000          
+m <- 1000         
+
+result <- data.frame(
+  样本量n = integer(),
+  理论偏差 = numeric(),
+  平均Bootstrap偏差 = numeric(),
+  理论标准误 = numeric(),
+  平均Bootstrap标准误 = numeric()
+)
+
+for (n in n_list) {
+  theo_bias <- lambda_true / (n - 1) 
+  theo_se <- (lambda_true * n) / ((n - 1) * sqrt(n - 2)) 
+  
+  boot_bias_vec <- numeric(m)
+  boot_se_vec <- numeric(m)
+  
+  for (sim in 1:m) {
+    x_obs <- rexp(n = n, rate = lambda_true)  
+    lambda_obs <- 1 / mean(x_obs)             
+    
+    lambda_boot <- replicate(B, {
+      x_boot <- sample(x_obs, size = n, replace = TRUE)  
+      1 / mean(x_boot)                                  
+    })
+    
+    boot_bias <- mean(lambda_boot) - lambda_obs  
+    boot_se <- sd(lambda_boot)                   
+    
+    boot_bias_vec[sim] <- boot_bias
+    boot_se_vec[sim] <- boot_se
+  }
+  
+  mean_boot_bias <- mean(boot_bias_vec)
+  mean_boot_se <- mean(boot_se_vec)
+  
+  result <- rbind(result, data.frame(
+    样本量n = n,
+    理论偏差 = round(theo_bias, 4),
+    平均Bootstrap偏差 = round(mean_boot_bias, 4),
+    理论标准误 = round(theo_se, 4),
+    平均Bootstrap标准误 = round(mean_boot_se, 4)
+  ))
+}
+
+print("不同样本量下理论值与Bootstrap估计值对比：")
+print(result)
+    
+```
+
+### 4.3 结果分析
+
+在指数分布\(\lambda\)的 MLE 估计中，Bootstrap 方法的性能高度依赖样本量，当\(n\geq10\)时，其能精准估计偏差和标准误；\(n=20\)时，可完全替代理论计算，验证了该方法在参数估计性能评估中的实用价值。

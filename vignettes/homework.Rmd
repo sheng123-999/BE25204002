@@ -1,0 +1,42 @@
+---
+title: "BE25204002 作业汇总"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{BE25204002 作业汇总}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+
+```{r, child='../inst/homework_rmds/A-BE25204002-2025-09-15.Rmd', results='asis', echo=FALSE}
+```
+
+```{r, child='../inst/homework_rmds/A-BE25204002-2025-09-22.Rmd', results='asis', echo=FALSE}
+```
+
+```{r, child='../inst/homework_rmds/A-BE25204002-2025-09-29.Rmd', results='asis', echo=FALSE}
+```
+
+```{r, child='../inst/homework_rmds/A-BE25204002-2025-10-13.Rmd', results='asis', echo=FALSE}
+```
+
+```{r, child='../inst/homework_rmds/A-BE25204002-2025-10-20.Rmd', results='asis', echo=FALSE}
+```
+
+```{r, child='../inst/homework_rmds/A-BE25204002-2025-10-27.Rmd', results='asis', echo=FALSE}
+```
+
+```{r, child='../inst/homework_rmds/A-BE25204002-2025-11-03.Rmd', results='asis', echo=FALSE}
+```
+
+```{r, child='../inst/homework_rmds/A-BE25204002-2025-11-10.Rmd', results='asis', echo=FALSE}
+```
+
+```{r, child='../inst/homework_rmds/A-BE25204002-2025-11-17.Rmd', results='asis', echo=FALSE}
+```
+
+```{r, child='../inst/homework_rmds/A-BE25204002-2025-11-24.Rmd', results='asis', echo=FALSE}
+```
+
+```{r, child='../inst/homework_rmds/A-BE25204002-2025-12-01.Rmd', results='asis', echo=FALSE}
+```

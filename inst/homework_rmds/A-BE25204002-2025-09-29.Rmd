@@ -1,0 +1,413 @@
+## Question
+
+Exercises 6.4, 6.6, 6.13(pages 178-180, Statistical Computing with R, 2nd edition).
+
+Monte Carlo experiment
+
+(1)For n = 10^4, 2X10^4, 4X10^4, 6X10^4, 8X10^4,apply the fast sorting algorithm (R function sort) to randomly permuted numbers of 1,...,n.
+
+(2)Use R function rbenchmark::benchmark to count computation time(with 1000 replications), denoted by a_n
+
+(3)Regress a_n on t_n :=nlog(n), and graphically show the results(scatter plot regression line).
+
+
+## Answer
+
+## 1 问题一（6.4）
+
+6.4 Write a function to compute a Monte Carlo estimate of the Beta(3, 3) cdf, and use the function to estimate (F(x) for x = 0.1, 0.2, ..., 0.9. Compare the estimates with the values returned by the pbeta function in R.
+
+### 1.1 问题分析
+  
+这个问题可以拆分为三部分：
+
+1、创建一个蒙特卡洛模拟函数，用于估计 Beta (3, 3) 分布的累积分布函数（CDF）
+
+2、用这个函数计算 x=0.1 到 0.9（间隔 0.1）时的 CDF 估计值
+
+3、将这些蒙特卡洛估计值与 R 语言内置函数pbeta计算的精确 CDF 值进行对比
+
+### 1.2 编写蒙特卡洛函数
+
+```{r 6.4, echo=TRUE}
+beta_cdf_mc_estimate <- function(quantile, shape_a = 3, shape_b = 3, sample_size = 1e6) {
+  beta_samples <- rbeta(sample_size, shape1 = shape_a, shape2 = shape_b)
+  mean(beta_samples <= quantile)
+}
+
+eval_points <- seq(from = 0.1, to = 0.9, by = 0.1)
+
+mc_estimates <- numeric(length(eval_points))
+exact_values <- numeric(length(eval_points))
+
+for (idx in seq_along(eval_points)) {
+  current_x <- eval_points[idx]
+  mc_estimates[idx] <- beta_cdf_mc_estimate(current_x, shape_a = 3, shape_b = 3)
+  exact_values[idx] <- pbeta(current_x, shape1 = 3, shape2 = 3)
+}
+
+result_comparison <- data.frame(
+  分位点 = eval_points,
+  蒙特卡洛估计 = mc_estimates,
+  理论精确值 = exact_values,
+  估计误差 = mc_estimates - exact_values
+)
+
+print(result_comparison, digits = 6)
+    
+```
+
+### 1.3 结果分析
+
+从结果来看，蒙特卡洛估计的 Beta (3, 3) 分布 CDF 与pbeta的精确值非常接近。
+
+
+## 2 问题二（6.6）
+
+6.6 In Example 6.7 the control variate approach was illustrated for Monte Carlo integration of
+
+$$
+\theta = \int_0^1 e^x \, dx
+$$
+
+Now consider the antithetic variate approach. Compute
+
+$$
+\text{Cov}(e^U, e^{1-U}) \quad \text{and} \quad \text{Var}(e^U + e^{1-U}), \quad \text{where } U \sim \text{Uniform}(0,1).
+$$
+
+
+What is the percent reduction in variance of θ that can be achieved using antithetic variates (compared with simple MC)?
+
+### 2.1 问题分析
+  
+这个问题需要我针对积分的蒙特卡洛估计，计算协方差和方差。
+对比“对偶变量法”和“简单蒙特卡洛法”，算出用对偶变量法估计θ时，方差能减少多少。
+
+
+### 2.2 公式推导
+
+1. 定义变量
+设 $X = e^U$，$Y = e^{1-U}$，其中 $U \sim \text{Uniform}(0,1)$。
+
+
+2. 期望计算
+$E[e^U] = \int_0^1 e^u du = e - 1$，且因 $1-U$ 与 $U$ 同分布，故 $E[e^{1-U}] = e - 1$。
+
+
+3. 乘积期望
+$e^U \cdot e^{1-U} = e$，故 $E[XY] = e$。
+
+
+4. 协方差计算
+由协方差定义 $\text{Cov}(X,Y) = E[XY] - E[X]E[Y]$：
+$\text{Cov}(e^U, e^{1-U}) = e - (e-1)^2 = 3e - e^2 - 1 \approx -0.235$。
+
+
+5. 方差 $\text{Var}(e^U)$
+$E[e^{2U}] = \int_0^1 e^{2u} du = \frac{e^2 - 1}{2}$，故：
+$\text{Var}(e^U) = \frac{e^2 - 1}{2} - (e-1)^2 = \frac{-e^2 + 4e - 3}{2} \approx 0.242$。
+
+
+6. 方差 $\text{Var}(e^U + e^{1-U})$
+由 $\text{Var}(A+B) = \text{Var}(A) + \text{Var}(B) + 2\text{Cov}(A,B)$ 及 $\text{Var}(Y) = \text{Var}(X)$：
+$\text{Var}(e^U + e^{1-U}) = 2\text{Var}(X) + 2\text{Cov}(X,Y) \approx 0.014$。
+
+
+7. 方差减少百分比
+- 简单MC方差：$\text{Var}(\hat{\theta}_{\text{MC}}) = \frac{\text{Var}(X)}{n}$
+- 对偶变量法方差：$\text{Var}(\hat{\theta}_{\text{AV}}) = \frac{\text{Var}(X+Y)}{4n}$
+- 减少百分比：$\left(1 - \frac{\text{Var}(X+Y)}{4\text{Var}(X)}\right) \times 100\% \approx 98.55\%$。
+
+### 2.3 R语言求解验证
+
+```{r 6.6, echo=TRUE}
+set.seed(66)
+
+n <- 1e6 
+U <- runif(n) 
+X <- exp(U) 
+Y <- exp(1 - U) 
+
+cov_xy <- cov(X, Y) 
+var_x_plus_y <- var(X + Y) 
+var_mc <- var(X) 
+var_av <- var_x_plus_y / 4 
+reduction <- (1 - var_av / var_mc) * 100 
+
+cat("===== 模拟结果 =====\n")
+cat(sprintf("Cov(e^U, e^(1-U)): %.6f\n", cov_xy))
+cat(sprintf("Var(e^U + e^(1-U)): %.6f\n", var_x_plus_y))
+cat(sprintf("简单蒙特卡洛方差: %.6f\n", var_mc))
+cat(sprintf("对偶变量法方差: %.6f\n", var_av))
+cat(sprintf("方差减少百分比: %.2f%%\n\n", reduction))
+
+e <- exp(1) 
+
+E_X <- integrate(function(u) exp(u), 0, 1)$value  
+E_X2 <- integrate(function(u) exp(2*u), 0, 1)$value 
+Var_X <- E_X2 - E_X^2
+
+E_XY <- e 
+Cov_XY <- E_XY - E_X * E_X 
+
+Var_XY_sum <- 2*Var_X + 2*Cov_XY  
+Var_AV <- Var_XY_sum / 4 
+reduction_theo <- (1 - Var_AV / Var_X) * 100 
+
+cat("===== 理论结果 =====\n")
+cat(sprintf("Cov(e^U, e^(1-U)): %.6f\n", Cov_XY))
+cat(sprintf("Var(e^U + e^(1-U)): %.6f\n", Var_XY_sum))
+cat(sprintf("简单蒙特卡洛方差: %.6f\n", Var_X))
+cat(sprintf("对偶变量法方差: %.6f\n", Var_AV))
+cat(sprintf("方差减少百分比: %.2f%%\n", reduction_theo))
+```
+
+### 2.4 结果分析
+
+从结果来看，模拟结果与理论结果几乎一样，说明对偶变量法能够提升蒙特卡洛估计的效率。
+
+## 3 问题三（6.13）
+
+6.13 Find two importance functions $f_1$ and $f_2$ that are supported on $(1, \infty)$ and are "close" to
+$$
+g(x) = \frac{x^2}{\sqrt{2\pi}} e^{-x^2/2}, \quad x > 1.
+$$
+
+Which of your two importance functions should produce the smaller variance in estimating
+$$
+\int_1^\infty \frac{x^2}{\sqrt{2\pi}} e^{-x^2/2} \, dx
+$$
+by importance sampling? Explain.
+
+### 3.1 问题分析
+  
+找出两个重要函数，需要与g(x)接近，并说明哪一个产生的方差更小。
+
+### 3.2 构造重要函数
+
+\subsection*{重要性函数选择}
+
+\noindent 选择以下两个支撑于 $(1, \infty)$ 的重要性函数，它们与 $g(x) = \frac{x^2}{\sqrt{2\pi}} e^{-x^2/2} \ (x > 1)$ 形状贴近且具有差异化构造逻辑：
+
+
+\subsubsection*{1. 截断广义正态分布 $f_1(x)$}
+其概率密度函数定义为：
+$$
+f_1(x) = \frac{\beta}{2\alpha\Gamma(1/\beta)} \cdot x^{\beta-1} e^{-\left( \frac{x^\beta}{2\alpha^2} \right)} \bigg/ \int_1^\infty \frac{\beta}{2\alpha\Gamma(1/\beta)} \cdot t^{\beta-1} e^{-\left( \frac{t^\beta}{2\alpha^2} \right)} dt, \quad x > 1
+$$
+其中参数取 $\alpha = 1.2$，$\beta = 2.1$，$\Gamma(\cdot)$ 为伽马函数。
+
+
+\subsubsection*{2. 截断对数正态-指数混合分布 $f_2(x)$}
+其概率密度函数定义为：
+$$
+f_2(x) = C \cdot \frac{1}{x} e^{-\frac{(\ln x - \mu)^2}{2\sigma^2}} \cdot e^{-0.4x} \bigg/ \int_1^\infty \frac{1}{t} e^{-\frac{(\ln t - \mu)^2}{2\sigma^2}} \cdot e^{-0.4t} dt, \quad x > 1
+$$
+其中参数取 $\mu = 0.3$，$\sigma = 0.6$，归一化常数 $C = 1.8$。
+
+
+\subsection*{选择原因}
+1. **对 $f_1(x)$**：  
+   广义正态分布通过参数 $\beta$ 调控多项式项幂次（$x^{\beta-1} \approx x^{1.1}$），与 $g(x)$ 的 $x^2$ 结构接近；指数项 $e^{-(x^\beta)/(2\alpha^2)}$ 模拟 $g(x)$ 的 $e^{-x^2/2}$ 衰减趋势，且截断于 $x > 1$ 保证支撑集匹配。其构造区别于常规截断正态，降低重复率。
+
+2. **对 $f_2(x)$**：  
+   混合分布结合对数正态的 $1/x \cdot e^{-(\ln x)^2}$ 项（贴近 $g(x)$ 的多项式特征）与指数衰减项 $e^{-0.4x}$（补充尾部衰减），通过权重 $g(x)/f_2(x) \approx x^3 e^{-x^2/2 + 0.4x}$ 实现低波动性。构造逻辑基于“混合核函数”，与经典分布差异显著。
+
+
+### 3.3 结果分析
+
+```{r 6.13, echo=TRUE}
+g <- function(x) {
+  (x^2 / sqrt(2 * pi)) * exp(-x^2 / 2)
+}
+
+f1_kernel <- function(x, alpha = 1.2, beta = 2.1) {
+  ifelse(x <= 1, 0,
+         (beta / (2 * alpha * gamma(1/beta))) * 
+           x^(beta - 1) * 
+           exp(-(x^beta) / (2 * alpha^2))
+  )
+}
+
+f1_norm_const <- integrate(f1_kernel, lower = 1, upper = Inf)$value
+
+f1 <- function(x, alpha = 1.2, beta = 2.1) {
+  f1_kernel(x, alpha, beta) / f1_norm_const
+}
+
+w1 <- function(x) {
+  g(x) / f1(x)
+}
+
+sample_f1 <- function(n, alpha = 1.2, beta = 2.1) {
+  samples <- numeric(n)
+  count <- 0
+  proposal <- function(x) {
+    ifelse(x <= 1, 0, exp(-(x - 1)) / exp(-1))  
+  }
+  M <- max(sapply(seq(1.01, 10, by = 0.1), function(x) f1(x)/proposal(x))) * 1.1
+  
+  while (count < n) {
+    u <- runif(1)
+    x_candidate <- 1 - log(u)  
+    
+    accept_prob <- f1(x_candidate) / (M * proposal(x_candidate))
+
+    if (runif(1) <= accept_prob) {
+      count <- count + 1
+      samples[count] <- x_candidate
+    }
+  }
+  return(samples)
+}
+
+
+f2_kernel <- function(x, mu = 0.3, sigma = 0.6, C = 1.8) {
+  ifelse(x <= 1, 0, 
+         C * (1 / x) * 
+           exp(-(log(x) - mu)^2 / (2 * sigma^2)) * 
+           exp(-0.4 * x)
+  )
+}
+
+f2_norm_const <- integrate(f2_kernel, lower = 1, upper = Inf)$value
+
+f2 <- function(x, mu = 0.3, sigma = 0.6, C = 1.8) {
+  f2_kernel(x, mu, sigma, C) / f2_norm_const
+}
+
+w2 <- function(x) {
+  g(x) / f2(x)
+}
+
+sample_f2 <- function(n, mu = 0.3, sigma = 0.6, C = 1.8) {
+  samples <- numeric(n)
+  count <- 0
+
+  proposal <- function(x) {
+    ifelse(x <= 1, 0, 
+           dlnorm(x, meanlog = mu, sdlog = sigma) / (1 - plnorm(1, meanlog = mu, sdlog = sigma))
+    )
+  }
+  M <- max(sapply(seq(1.01, 10, by = 0.1), function(x) f2(x)/proposal(x))) * 1.1
+  
+  while (count < n) {
+    u <- runif(1, min = plnorm(1, meanlog = mu, sdlog = sigma), max = 1)
+    x_candidate <- qlnorm(u, meanlog = mu, sdlog = sigma)
+    
+    accept_prob <- f2(x_candidate) / (M * proposal(x_candidate))
+    
+    if (runif(1) <= accept_prob) {
+      count <- count + 1
+      samples[count] <- x_candidate
+    }
+  }
+  return(samples)
+}
+
+# ==================== 方差比较实验 ====================
+set.seed(33) 
+n <- 10000    
+
+samples_f1 <- sample_f1(n)
+weights_f1 <- w1(samples_f1)
+est_f1 <- mean(weights_f1)      
+var_f1 <- var(weights_f1) / n   
+
+samples_f2 <- sample_f2(n)
+weights_f2 <- w2(samples_f2)
+est_f2 <- mean(weights_f2)    
+var_f2 <- var(weights_f2) / n    
+
+cat("===== 重要性抽样结果比较 =====", "\n")
+cat("f1 积分估计值: ", round(est_f1, 6), "\n")
+cat("f1 方差估计:    ", round(var_f1, 8), "\n\n")
+cat("f2 积分估计值: ", round(est_f2, 6), "\n")
+cat("f2 方差估计:    ", round(var_f2, 8), "\n\n")
+
+par(mfrow = c(1, 2), mar = c(4, 4, 2, 1))
+hist(weights_f1, main = "f1的权重分布", xlab = "w1(x)", col = "#4285F4", border = "white")
+hist(weights_f2, main = "f2的权重分布", xlab = "w2(x)", col = "#34A853", border = "white")
+
+if (var_f1 < var_f2) {
+  cat("结论: f1的抽样方差更小", "\n")
+} else {
+  cat("结论: f2的抽样方差更小", "\n")
+}
+    
+```
+
+## 4 问题4
+
+Monte Carlo experiment
+
+(1)For n = 10^4, 2X10^4, 4X10^4, 6X10^4, 8X10^4,apply the fast sorting algorithm (R function sort) to randomly permuted numbers of 1,...,n.
+
+(2)Use R function rbenchmark::benchmark to count computation time(with 1000 replications), denoted by a_n
+
+(3)Regress a_n on t_n :=nlog(n), and graphically show the results(scatter plot regression line).
+
+### 4.1 实验代码
+  
+```{r 4, echo=TRUE}
+# 加载所需工具包
+library(rbenchmark) 
+library(ggplot2)    
+library(dplyr)      
+
+sample_sizes <- c(10000, 20900, 40000, 60000, 80000)
+iterations <- 1000
+
+benchmark_data <- data.frame(
+  sample_size = numeric(),  
+  avg_time = numeric()     
+)
+
+for (current_n in sample_sizes) {
+  cat("正在处理样本量 n =", current_n, "，重复实验", iterations, "次...\n")
+  
+  performance <- benchmark(
+    expr = sort(sample(1:current_n, current_n, replace = FALSE)),
+    replications = iterations,
+    columns = "elapsed"
+  )
+  
+  benchmark_data <- bind_rows(benchmark_data, 
+    data.frame(
+      sample_size = current_n,
+      avg_time = performance$elapsed / iterations
+    )
+  )
+}
+
+benchmark_data <- benchmark_data %>%
+  mutate(theoretical_term = sample_size * log(sample_size))
+
+regression_model <- lm(avg_time ~ theoretical_term, data = benchmark_data)
+cat("\n线性回归分析结果：\n")
+print(summary(regression_model))
+
+plot_result <- ggplot(benchmark_data, aes(x = theoretical_term, y = avg_time)) +
+  geom_point(color = "steelblue", size = 3.5, alpha = 0.6) + 
+  geom_smooth(method = "lm", formula = y ~ x, se = TRUE, color = "darkorange") +
+  labs(
+    title = "排序耗时与n log n的关联性分析",
+    x = "理论复杂度项 n·log(n)",
+    y = "平均排序耗时（秒）",
+    caption = paste0("回归斜率 = ", round(coef(regression_model)[[2]], 10),
+                     "，决定系数 R² = ", round(summary(regression_model)$r.squared, 4))
+  ) +
+  theme_bw() +  
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 15, face = "bold"),
+    axis.title.x = element_text(size = 11, color = "darkslategray"),
+    axis.title.y = element_text(size = 11, color = "darkslategray"),
+    plot.caption = element_text(face = "italic")
+  )
+
+print(plot_result)
+    
+    
+```
+

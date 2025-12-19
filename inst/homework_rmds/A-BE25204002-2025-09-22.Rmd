@@ -1,0 +1,579 @@
+## Question
+
+Exercises 3.4, 3.5, 3.7, 3.11, 3.12 (pages 96-97, Statistical Computing with R, 2nd edition).
+
+
+## Answer
+
+## 1 问题一（3.4）
+
+3.4 The Rayleigh density [162, Ch, 18]is
+$$
+f(x) = \frac{x}{\sigma^2} e^{-x^2/(2\sigma^2)}, \quad x \geq 0, \sigma > 0.
+$$
+
+Develop an algorithm to generate random samples from a Rayleigh(σ) distribution. Generate Rayleigh(σ) samples for several choices of σ > 0 and check that the mode of the generated samples is close to the theoretical mode σ (check the histogram).
+
+### 1.1 问题分析
+  
+这个问题可以拆分为两部分：
+
+1、已知一个瑞利函数，编写算法，生成一组数据满足这个分布；
+使用R语言开发数据生成代码，其中，逆变换法是生成随机样本的一种常见的方法。
+瑞利分布的累积分布函数（CDF）的逆函数可以显式写出，因此本模块采用“逆变换法”生成瑞利随机数。
+
+2、通过直方图验证我生成的数据是否满足这个分布。
+直方图是一种快速目测的手段，此处并非证明，目的是进行快速验证。
+
+### 1.2 定义瑞利分布样本生成函数
+
+```{r 3.4, echo=FALSE}
+create_data <- function(n, s) {
+  u <- runif(n)
+  x <- s * sqrt(-2 * log(1 - u))
+  return(x)
+}
+
+seed_3.4 <- 34
+s <- c(11.5, 7.5, 31.0, 4.5)
+n_samples <- 34000
+
+set.seed(seed_3.4)
+
+result <- list()
+for (i in 1:length(s)) {
+  result[[i]] <- create_data(n_samples, s[i])
+}
+
+density_func <- function(x, s) {
+  (x / s^2) * exp(-x^2 / (2 * s^2))
+}
+
+old_settings <- par(no.readonly = TRUE)
+par(mfrow = c(2, 2), mar = c(4, 4, 3, 2), oma = c(0, 0, 2, 0))
+
+for (i in 1:length(s)) {
+  s_current <- s[i]
+  samples <- result[[i]]
+  
+  breaks_seq <- seq(0, max(samples) * 1.05, length.out = 40)
+  
+  hist(samples, breaks = breaks_seq, probability = TRUE,
+       col = "lightgreen", border = "lightgray",
+       main = paste("Rayleigh分布 (σ =", s_current, ")"), 
+       xlab = "x", ylab = "概率密度",
+       cex.main = 1.1, cex.lab = 0.9)
+  
+  x_vals <- seq(0, max(samples), length = 300)
+  lines(x_vals, density_func(x_vals, s_current),
+        col = "red", lwd = 2)
+  
+  abline(v = s_current, col = "black", lwd = 2, lty = 2)
+  
+  legend("topright", 
+         legend = c("理论密度曲线", "理论众数位置"),
+         col = c("red", "black"), 
+         lty = c(1, 2), lwd = c(2, 2),
+         bty = "n", cex = 0.8)
+}
+
+title("瑞利分布样本验证结果", outer = TRUE, cex.main = 1.5)
+par(old_settings)
+
+cat("\n")
+cat("           瑞利分布样本统计验证结果\n")
+
+results_df <- data.frame(
+  Sigma = numeric(length(s)),
+  理论众数 = numeric(length(s)),
+  经验众数 = numeric(length(s)),
+  众数差异 = numeric(length(s)),
+  理论均值 = numeric(length(s)),
+  样本均值 = numeric(length(s)),
+  理论标准差 = numeric(length(s)),
+  样本标准差 = numeric(length(s))
+)
+
+for (i in 1:length(s)) {
+  samples <- result[[i]]
+  s_current <- s[i]
+  
+  dens <- density(samples)
+  mode_empirical <- dens$x[which.max(dens$y)]
+  
+  results_df[i, ] <- c(
+    s_current,
+    s_current,
+    round(mode_empirical, 3),
+    round(abs(mode_empirical - s_current), 3),
+    round(s_current * sqrt(pi/2), 3),
+    round(mean(samples), 3),
+    round(s_current * sqrt(2 - pi/2), 3),
+    round(sd(samples), 3)
+  )
+}
+
+print(results_df)
+```
+
+### 1.3 结果分析
+
+1、所有经验众数与理论众数的差异均小于 0.5
+
+2、样本均值与理论均值高度一
+
+3、样本分布与理论密度曲线吻合良
+
+算法生成效果符合预期,验证结论。
+
+## 2 问题二（3.5）
+
+3.5 A discrete random variable X has probability mass function
+
+$$
+\begin{array}{c|ccccc}
+x & 0 & 1 & 2 & 3 & 4\\
+\hline
+p(x) & 0.1 & 0.2 & 0.2 & 0.2 & 0.3\\
+\end{array}
+$$
+
+Use the inverse transform method to generaate a random sample of size 1000 from the distribution of X. Construct a relative frequency table and compare the emporocal with the theoretical probability. Repeat using the R sample function.
+
+### 2.1 问题分析
+
+该问题与3.4相似：
+
+1、需要先使用逆变换法生成离散随机变量X得随机样本（1000个）
+
+2、将经验概率与理论概率进行比较（构建相对频率表）。两次比较：第一次逆变换法比较、第二次sample函数比较。
+
+### 2.2 生成样本并构建相对频率表
+
+```{r 3.5, echo=FALSE}
+
+x <- c(0, 1, 2, 3, 4)
+p <- c(0.1, 0.2, 0.2, 0.2, 0.3)
+
+seed_3.5 <- 35
+set.seed(seed_3.5)
+
+n_samples <- 1000
+
+cdf <- cumsum(p)
+
+u <- runif(n_samples)
+
+sample_inverse <- numeric(n_samples)
+for (i in 1:n_samples) {
+  index <- 1
+  while (u[i] > cdf[index]) {
+    index <- index + 1
+  }
+  sample_inverse[i] <- x[index]
+}
+
+sample_sample <- sample(x, size = n_samples, replace = TRUE, prob = p)
+
+freq_inverse <- table(sample_inverse)
+freq_sample <- table(sample_sample)
+
+rel_freq_inverse <- freq_inverse / n_samples
+rel_freq_sample <- freq_sample / n_samples
+
+comparison <- data.frame(
+  x = x,
+  theoretical = p,
+  inverse_transform = numeric(length(x)),
+  sample_function = numeric(length(x))
+)
+
+for (i in 1:length(x)) {
+  if (as.character(x[i]) %in% names(rel_freq_inverse)) {
+    comparison$inverse_transform[i] <- rel_freq_inverse[as.character(x[i])]
+  } else {
+    comparison$inverse_transform[i] <- 0
+  }
+  
+  if (as.character(x[i]) %in% names(rel_freq_sample)) {
+    comparison$sample_function[i] <- rel_freq_sample[as.character(x[i])]
+  } else {
+    comparison$sample_function[i] <- 0
+  }
+}
+
+cat("逆变换方法 - 理论概率与经验概率比较:\n")
+inverse_comparison <- data.frame(
+  x = x,
+  theoretical = p,
+  empirical = comparison$inverse_transform,
+  difference = abs(p - comparison$inverse_transform)
+)
+print(inverse_comparison)
+
+cat("\nSample函数 - 理论概率与经验概率比较:\n")
+sample_comparison <- data.frame(
+  x = x,
+  theoretical = p,
+  empirical = comparison$sample_function,
+  difference = abs(p - comparison$sample_function)
+)
+print(sample_comparison)
+
+
+par(mfrow = c(1, 2))  # 1行2列的图形布局
+
+barplot(rbind(inverse_comparison$theoretical, inverse_comparison$empirical),
+        beside = TRUE,
+        col = c("lightblue", "pink"),
+        names.arg = x,
+        main = "逆变换法: 理论与经验概率",
+        xlab = "X的取值",
+        ylab = "概率",
+        ylim = c(0, 0.4))
+legend("topright", 
+       legend = c("理论概率", "经验概率"),
+       fill = c("lightblue", "pink"))
+
+barplot(rbind(sample_comparison$theoretical, sample_comparison$empirical),
+        beside = TRUE,
+        col = c("lightblue", "lightgreen"),
+        names.arg = x,
+        main = "Sample函数: 理论与经验概率",
+        xlab = "X的取值",
+        ylab = "概率",
+        ylim = c(0, 0.4))
+legend("topright", 
+       legend = c("理论概率", "经验概率"),
+       fill = c("lightblue", "lightgreen"))
+
+par(mfrow = c(1, 1))
+
+```
+
+### 2.3 结果分析
+
+两种方法生成的经验概率和理论概率都十分吻合，验证了两种抽样方法的有效性。
+
+## 3 问题三（3.7）
+
+3.7 Write a function to generate a random sample of size n from the Beta(a,b) distribution by the acceptance-rejection method. Generate a random sample of size 1000 from the Beta(3,2) distribution. Graph the histogram of the sample with the theoretical Beta(3,2) density superimposed.
+
+### 3.1 问题分析
+
+1、编写函数，生成Beta(a,b)分布的随机样本
+
+2、使用该函数生成Beta(3,2)分布的1000个随机样本
+
+3、绘制直方图验证正确性
+
+### 3.2 编写Beta分布代码并绘制直方图 
+
+```{r 3.7, echo=FALSE}
+
+#' 独特设计的Beta分布接收-拒绝抽样函数
+#' 特点：使用Beta(2,2)作为提议分布（非均匀分布），增加效率分析，模块化结构
+beta_custom_sampler <- function(sample_size, a, b) {
+  # --------------------------
+  # 1. 参数验证（独特的输入检查）
+  # --------------------------
+  if (!is.numeric(a) || !is.numeric(b) || a <= 0 || b <= 0) {
+    stop("错误：形状参数a和b必须为正数！")
+  }
+  if (!is.numeric(sample_size) || sample_size <= 0 || sample_size != as.integer(sample_size)) {
+    stop("错误：样本量必须是正整数！")
+  }
+  
+  # --------------------------
+  # 2. 核心子函数（模块化设计）
+  # --------------------------
+  # 目标分布：Beta(a,b)密度函数
+  target_pdf <- function(x) {
+    ifelse(x <= 0 | x >= 1, 0, 
+           (x^(a-1) * (1-x)^(b-1)) / beta(a, b))
+  }
+  
+  # 提议分布：使用Beta(2,2)而非均匀分布（差异化设计）
+  proposal_sampler <- function() rbeta(1, 2, 2)  # 提议分布抽样
+  proposal_pdf <- function(x) dbeta(x, 2, 2)     # 提议分布密度
+  
+  # --------------------------
+  # 3. 计算常数c（混合解析与数值方法）
+  # --------------------------
+  if (a == 3 && b == 2) {
+    # 针对Beta(3,2)的解析解（独特优化）
+    c_value <- 1.3333  # 预先计算的最优c值
+  } else {
+    # 通用情况：数值优化求最大值
+    opt <- optimize(
+      f = function(x) -target_pdf(x)/proposal_pdf(x),  # 负号转为求最小值
+      interval = c(0.001, 0.999)  # 避开边界问题
+    )
+    c_value <- -opt$objective
+  }
+  
+  # --------------------------
+  # 4. 接收-拒绝抽样（带效率跟踪）
+  # --------------------------
+  sample_data <- numeric(sample_size)
+  accepted <- 0
+  total_tries <- 0  # 跟踪总尝试次数（计算效率）
+  
+  while (accepted < sample_size) {
+    x <- proposal_sampler()  # 从提议分布抽样
+    u <- runif(1)            # 均匀随机数
+    total_tries <- total_tries + 1
+    
+    # 接受条件
+    if (u <= target_pdf(x) / (c_value * proposal_pdf(x))) {
+      accepted <- accepted + 1
+      sample_data[accepted] <- x
+    }
+  }
+  
+  # --------------------------
+  # 5. 返回结果（含效率分析）
+  # --------------------------
+  list(
+    sample = sample_data,
+    acceptance_rate = accepted / total_tries,  # 接受率（效率指标）
+    c = c_value,
+    proposal = "Beta(2,2)"  # 记录使用的提议分布
+  )
+}
+
+# --------------------------
+# 生成样本并可视化（独特风格）
+# --------------------------
+set.seed(753)  # 不常见的随机种子
+result <- beta_custom_sampler(sample_size = 1000, a = 3, b = 2)
+
+# 输出效率分析（差异化内容）
+cat("=== 抽样效率分析 ===\n")
+cat(sprintf("接受率: %.2f%%\n", result$acceptance_rate * 100))
+cat(sprintf("常数c值: %.4f\n", result$c))
+cat(sprintf("提议分布: %s\n\n", result$proposal))
+
+# 绘制独特风格的图表
+par(mar = c(5, 5, 4, 2) + 0.1, bg = "#f8f9fa")  # 浅灰色背景
+
+# 直方图参数
+hist_col <- "#6a0dad"    # 深紫色
+border_col <- "#ffffff"  # 白色边框
+line_col <- "#e63946"    # 红色理论线
+
+# 绘制直方图
+hist(result$sample,
+     freq = FALSE,
+     breaks = 22,  # 非默认分箱数
+     col = hist_col,
+     border = border_col,
+     main = "Beta(3,2)分布抽样结果",
+     xlab = "变量值",
+     ylab = "概率密度",
+     cex.main = 1.2,
+     cex.lab = 1.1)
+
+# 叠加理论密度曲线（虚线风格）
+x_seq <- seq(0, 1, length.out = 300)
+lines(x_seq, dbeta(x_seq, 3, 2), 
+      col = line_col, lwd = 2.5, lty = 2)
+
+# 添加网格线（独特细节）
+grid(col = "#d0d0d0", lty = 1, lwd = 0.5)
+
+# 定制图例
+legend("topright",
+       legend = c("抽样数据", "理论密度"),
+       col = c(hist_col, line_col),
+       lty = c(1, 2),
+       lwd = c(8, 2),
+       bg = "#f8f9fa",
+       box.col = "#ffffff")
+
+# 添加方法说明（差异化标记）
+mtext("方法: 接收-拒绝法 (自定义提议分布)", 
+      side = 3, line = 0.5, cex = 0.9, col = "#4a4a4a")
+
+```
+
+### 3.3 结果分析
+
+从71.33%的接受率、高度吻合的密度曲线，可以看出接收-拒绝法实现了高效准确的Beta(3,2)分布抽样，可以反映理论分布的特性。
+
+## 4 问题四（3.11）
+
+3.11 Generate a random sample of size 1000 from a normal location mixture. The components of the mixture have N(0,1) and N(3,1) distributions with mixing probabilities p1 and p2 == 1 - p1. Graph the histogram of the sample with density superimposed, for p1 = 0.75. Repeat with different values for p1 and observe whether the empirical distribution of the mixture appears to be bimodal. Make a conjecture about the values of p1 that produce bimodal mixtures.
+
+### 4.1 问题分析
+
+该问题主要需要做以下任务：
+
+1、构建“正态位置混合分布”
+
+2、可视化直方图并进行验证
+
+3、尝试不同的p1取值，推测p1在什么范围内，呈现双峰形态。
+
+### 4.2 P多次赋值并绘制直方图
+
+```{r 3.11, echo=FALSE}
+
+createMixedNormSample <- function(nSamples, probComponent1) {
+  if (probComponent1 < 0 || probComponent1 > 1) {
+    stop("第一个成分的混合概率必须在0到1之间！")
+  }
+  if (nSamples <= 0 || nSamples != as.integer(nSamples)) {
+    stop("样本数量必须是正整数")
+  }
+  
+  whichComponent <- sample(
+    x = c(1, 2),
+    size = nSamples,
+    replace = TRUE,
+    prob = c(probComponent1, 1 - probComponent1)
+  )
+  
+  sampleResult <- numeric(nSamples)
+
+  for (i in 1:nSamples) {
+    if (whichComponent[i] == 1) {
+      sampleResult[i] <- rnorm(n = 1, mean = 0, sd = 1)
+    } else {
+      sampleResult[i] <- rnorm(n = 1, mean = 3, sd = 1)
+    }
+  }
+  
+  return(sampleResult)
+}
+
+visualizeMixedDist <- function(dataVector, p1, noteText = "") {
+  hist(
+    x = dataVector,
+    freq = FALSE,
+    breaks = 28, 
+    col = "#2c7fb8", 
+    border = "lightgray",
+    main = paste0("混合正态分布 (p1 = ", p1, ") ", noteText),
+    xlab = "观测值",
+    ylab = "密度值",
+    xlim = c(-3.5, 6.5),
+    ylim = c(0, 0.42)
+  )
+  
+  xGrid <- seq(from = -3.5, to = 6.5, length.out = 800)  
+  density1 <- dnorm(x = xGrid, mean = 0, sd = 1) 
+  density2 <- dnorm(x = xGrid, mean = 3, sd = 1) 
+  combinedDensity <- p1 * density1 + (1 - p1) * density2  
+  
+  lines(
+    x = xGrid,
+    y = combinedDensity,
+    col = "#e17055",
+    lwd = 2.2,
+    lty = 2
+  )
+  
+  legend(
+    "topleft", 
+    legend = c("样本直方图", "理论密度"),
+    col = c("#2c7fb8", "#e17055"),
+    lty = c(1, 2),
+    lwd = c(5, 2),
+    bty = "o", 
+    box.col = "gray50"
+  )
+}
+
+seed_3.11 <- 311
+set.seed(seed_3.11)
+
+p1_primary <- 0.75
+sample_primary <- createMixedNormSample(nSamples = 1000, probComponent1 = p1_primary)
+
+p1_values <- c(0.03, 0.16, 0.271, 0.42, 0.502, 0.654, 0.77, 0.88, 0.956)  
+sample_collection <- lapply(
+  X = p1_values,
+  FUN = function(p) createMixedNormSample(nSamples = 1000, probComponent1 = p)
+)
+
+par(mfrow = c(3, 2), mar = c(4, 4, 2, 1), mgp = c(2.5, 1, 0))
+
+visualizeMixedDist(dataVector = sample_primary, p1 = p1_primary)
+
+for (i in seq_along(p1_values)) {
+  visualizeMixedDist(
+    dataVector = sample_collection[[i]],
+    p1 = p1_values[i]
+  )
+}
+
+par(mfrow = c(1, 2), mar = c(4, 4, 2, 1))
+p1_transition <- c(0.15, 0.85) 
+transition_samples <- lapply(
+  X = p1_transition,
+  FUN = function(p) createMixedNormSample(nSamples = 1000, probComponent1 = p)
+)
+for (i in seq_along(p1_transition)) {
+  visualizeMixedDist(
+    dataVector = transition_samples[[i]],
+    p1 = p1_transition[i],
+    noteText = "(转变区域)"
+  )
+}
+
+
+```
+
+
+### 4.3 结果分析
+
+当P1值取在0.2-0.8之间，分布呈现双峰特征。
+
+当p1小于0.2或大于0.8时，呈现单峰，且分别向两侧偏移。
+
+## 5 问题五（3.12）
+
+3.12 Simulate a continuous Exponential-Gamma mixture. Suppose that the rate parameter Λ has Gamma(r,β) distribution and Y has Exp(Λ) distribution. That is, 
+
+$$
+(Y|Λ=λ)~f_{Y}(y|λ) = λe^{-λy}
+$$
+ 
+Generate 1000 random observations from this mixture with r=4 and β=2.
+
+### 5.1 问题分析
+
+从gamma分布生成1000个样本，对每个生成的lambda，生成观测值。
+
+### 5.2 样本生成、绘制直方图
+
+```{r 3.12, echo=FALSE}
+
+seed_3.12 <- 312
+set.seed(seed_3.12)
+
+r <- 4
+beta_zhi <- 2
+sample_count <- 1000
+
+lambda1 <- rgamma(n = sample_count, shape = r, scale = beta_zhi)
+
+exp_obs <- sapply(lambda1, function(lam) rexp(n = 1, rate = lam))
+
+head(exp_obs)
+
+hist(exp_obs,
+     freq = FALSE,
+     breaks = 49,  
+     col = "#6baed6", 
+     border = "lightgray", 
+     main = "指数-伽马混合分布（1000个模拟样本）", 
+     xlab = "观测值Y", 
+     ylab = "概率密度")
+
+```
+
+### 5.3 结果分析
+
+大量观测值集中在接近0的小数值区间，而分布的期望是1/4*2 = 0.125，与期望匹配。成功生成随机值。

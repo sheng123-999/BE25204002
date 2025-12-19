@@ -1,0 +1,268 @@
+## Question
+
+Of $N = 1000$ hypotheses, $950$ are null and $50$ are alternative.
+The p-value under any null hypothesis is uniformly distributed
+(use the R function \texttt{runif}), and the p-value under any
+alternative hypothesis follows the beta distribution with
+parameter $0.1$ and $1$ (use the R function \texttt{rbeta}). Obtain
+Bonferroni adjusted p-values and B-H adjusted p-values.
+Calculate FWER, FDR, and TPR under nominal level $\alpha = 0.1$
+for each of the two adjustment methods based on $m = 10{,}000$
+simulation replicates. You should output the $6$ numbers to a
+$3 \times 2$ table (column names: Bonferroni correction, B-H
+correction; row names: FWER, FDR, TPR). Comment the results.
+
+Exercises 8.4 and 8.7 (page 240, Statistical Computing with R, 2nd edition).
+
+## Answer
+
+
+## 1 问题一
+
+Of $N = 1000$ hypotheses, $950$ are null and $50$ are alternative.
+The p-value under any null hypothesis is uniformly distributed
+(use the R function \texttt{runif}), and the p-value under any
+alternative hypothesis follows the beta distribution with
+parameter $0.1$ and $1$ (use the R function \texttt{rbeta}). Obtain
+Bonferroni adjusted p-values and B-H adjusted p-values.
+Calculate FWER, FDR, and TPR under nominal level $\alpha = 0.1$
+for each of the two adjustment methods based on $m = 10{,}000$
+simulation replicates. You should output the $6$ numbers to a
+$3 \times 2$ table (column names: Bonferroni correction, B-H
+correction; row names: FWER, FDR, TPR). Comment the results.
+
+### 1.1 问题分析
+
+该问题是对多重检验场景下两种经典校正方法（Bonferroni 校正与 B-H 校正）的性能进行对比，核心是通过模拟实验量化其在控制错误率与保持检验效能之间的权衡
+
+
+### 1.2 编程实现
+
+```{r 1, echo=TRUE}
+
+set.seed(200002)
+N <- 1000    
+null_count <- 950  
+alt_count <- 50  
+alpha <- 0.1      
+m <- 10000      
+
+fwer_bonf <- numeric(m)  
+fdr_bonf <- numeric(m)  
+tpr_bonf <- numeric(m) 
+
+fwer_bh <- numeric(m)  
+fdr_bh <- numeric(m) 
+tpr_bh <- numeric(m)    
+
+for (sim in 1:m) {
+
+  p_null <- runif(null_count)      
+  p_alt <- rbeta(alt_count, 0.1, 1)
+  p_values <- c(p_null, p_alt)    
+  
+  is_null <- c(rep(TRUE, null_count), rep(FALSE, alt_count))
+  
+  p_bonf <- p_values * N  
+  p_bonf[p_bonf > 1] <- 1 
+  
+  reject_bonf <- p_bonf <= alpha
+  
+  fwer_bonf[sim] <- as.numeric(any(reject_bonf & is_null))
+  
+  total_rejects <- sum(reject_bonf)
+  fdr_bonf[sim] <- ifelse(total_rejects == 0, 0, 
+                         sum(reject_bonf & is_null) / total_rejects)
+  
+  tpr_bonf[sim] <- sum(reject_bonf & !is_null) / alt_count
+  
+  ord <- order(p_values)
+  p_ordered <- p_values[ord]
+  m_total <- length(p_values)
+  bh_crit <- (1:m_total / m_total) * alpha
+  
+
+  k <- max(which(p_ordered <= bh_crit), 0)
+  
+  reject_bh <- logical(m_total)
+  if (k > 0) {
+    reject_bh[ord[1:k]] <- TRUE
+  }
+  
+  fwer_bh[sim] <- as.numeric(any(reject_bh & is_null))
+  
+  total_rejects_bh <- sum(reject_bh)
+  fdr_bh[sim] <- ifelse(total_rejects_bh == 0, 0, 
+                       sum(reject_bh & is_null) / total_rejects_bh)
+  
+  tpr_bh[sim] <- sum(reject_bh & !is_null) / alt_count
+}
+
+result <- data.frame(
+  "Bonferroni correction" = c(mean(fwer_bonf), mean(fdr_bonf), mean(tpr_bonf)),
+  "B-H correction" = c(mean(fwer_bh), mean(fdr_bh), mean(tpr_bh)),
+  row.names = c("FWER", "FDR", "TPR")
+)
+
+round(result, 5)
+    
+```
+
+### 1.3 结果分析
+
+结果印证了两种校正方法的核心权衡：
+Bonferroni 校正以牺牲检验效能为代价，严格控制 FWER，同时 FDR 极低，适用于对 “I 类错误累积” 高度敏感的场景。
+B-H 校正以放松 FWER 控制为代价，在保证 FDR 接近目标水平的同时显著提升 TPR，适用于需平衡 “发现真实效应” 与 “控制错误比例” 的场景。
+
+## 2 问题二（8.4） 
+
+Refer to the air-conditioning data set \texttt{aircondit} provided in the \texttt{boot} package. The 12 observations are the times in hours between failures of air-conditioning equipment [68, Example 1.1]:
+
+\[
+3,\ 5,\ 7,\ 18,\ 43,\ 85,\ 91,\ 98,\ 100,\ 130,\ 230,\ 487.
+\]
+
+Assume that the times between failures follow an exponential model
+
+\[
+\text{Exp}(\lambda).
+\]
+
+Obtain the MLE of the hazard rate $$\lambda$$ and use bootstrap to estimate the bias and standard error of the estimate.
+
+### 2.1 问题分析
+
+有 12 个空调设备故障间隔时间（单位：小时）的数据：3, 5, 7, 18, 43, 85, 91, 98, 100, 130, 230, 487。假设这些时间服从指数分布 Exp (λ)，其中 λ 为风险率（即单位时间内发生故障的概率）。需要完成两项任务：
+求解 λ 的最大似然估计（MLE）；
+用 bootstrap 方法估计该 MLE 的偏差和标准误。
+
+### 2.2 编程实现
+
+
+```{r 8.4, echo=TRUE}
+library(boot)
+data(aircondit) 
+
+aircondit <- as.numeric(unlist(aircondit))
+
+n <- length(aircondit)  
+sum_x <- sum(aircondit) 
+lambda_mle <- n / sum_x 
+cat("λ的MLE为：", lambda_mle, "\n")
+
+lambda_boot_stat <- function(data, indices) {
+  boot_sample <- data[indices]
+  n_boot <- length(boot_sample)
+  lambda_star <- n_boot / sum(boot_sample) 
+  return(lambda_star)
+}
+
+set.seed(84) 
+boot_result <- boot(
+  data = aircondit,
+  statistic = lambda_boot_stat,
+  R = 10000  
+)
+
+bias <- mean(boot_result$t) - boot_result$t0 
+se <- sd(boot_result$t) 
+
+cat("Bootstrap偏差估计：", bias, "\n")
+cat("Bootstrap标准误估计：", se, "\n")
+
+print(boot_result)
+```
+
+
+### 2.3 结果分析
+
+该空调设备故障间隔时间的风险率 λ 的最大似然估计为 0.00925（对应平均故障间隔约 108 小时）；
+Bootstrap 结果显示，该估计存在轻微正偏差（可忽略），近似无偏；
+估计的标准误约为 0.00424，反映了小样本下估计的不确定性，整体而言，该估计具有一定可靠性。
+
+## 3 问题三（8.7） 
+
+Refer to Exercise 8.6. Efron and Tibshirani discuss the following example [91, Chapter 7].  
+The five-dimensional scores data have a $5\times 5$ covariance matrix $\Sigma$, with positive eigenvalues  
+$$\lambda_1>\lambda_2>\lambda_3>\lambda_4>\lambda_5>0.$$  
+In principal components analysis,  
+$$\theta=\frac{\lambda_1}{\sum_{j=1}^{5}\lambda_j}$$  
+measures the proportion of variance explained by the first principal component.  
+
+Let $\hat\lambda_1>\hat\lambda_2>\hat\lambda_3>\hat\lambda_4>\hat\lambda_5$ be the eigenvalues of $\hat\Sigma$, where $\hat\Sigma$ is the MLE of $\Sigma$.  
+Compute the sample estimate  
+$$\hat\theta=\frac{\hat\lambda_1}{\sum_{j=1}^{5}\hat\lambda_j}$$  
+of $\theta$. Use bootstrap to estimate the bias and standard error of $\hat\theta$.
+
+### 3.1 问题分析
+
+计算\(\hat{\theta}\)的值；用 bootstrap 方法估计\(\hat{\theta}\)的偏差和标准误。
+
+协方差矩阵\(\Sigma\)的特征值表示对应主成分的方差，第一主成分的特征值\(\lambda_1\)最大，其占总方差（特征值之和）的比例\(\theta\)是主成分分析中衡量第一主成分重要性的关键指标。样本协方差矩阵\(\hat{\Sigma}\)是\(\Sigma\)的 MLE（对于多元正态数据，\(\hat{\Sigma}\)为除以样本量n的偏差校正协方差矩阵）。通过\(\hat{\Sigma}\)的特征值可计算\(\hat{\theta}\)，即样本中第一主成分解释的方差比例。
+
+从原始数据中有放回地抽取B个 bootstrap 样本（每个样本量与原始数据相同，均为n个五维观测）；对每个 bootstrap 样本计算\(\hat{\Sigma}^*\)（样本协方差矩阵的 MLE），再求其特征值并计算\(\hat{\theta}^*\)（该样本的第一主成分方差比例）；偏差估计为\(\text{bias} = \text{mean}(\hat{\theta}^*) - \hat{\theta}\)；标准误估计为\(\text{se} = \text{sd}(\hat{\theta}^*)\)（bootstrap 估计量的标准差）。
+
+
+### 3.2 编程实现
+
+```{r 8.7, echo=TRUE}
+
+library(boot)
+library(MASS) 
+
+set.seed(87)  
+n <- 100 
+p <- 5   
+
+V <- matrix(rnorm(p*p), nrow=p) 
+V_orth <- qr.Q(qr(V))  # 正交化（确保特征向量正交）
+Sigma <- V_orth %*% diag(c(5,4,3,2,1)) %*% t(V_orth)  # 协方差矩阵
+
+X <- mvrnorm(n = n, mu = rep(0, p), Sigma = Sigma)
+cat("模拟的五维数据维度：", dim(X), "\n") 
+
+sigma_hat_mle <- (n-1)/n * cov(X) 
+
+eigen_hat <- eigen(sigma_hat_mle)$values
+eigen_hat_sorted <- sort(eigen_hat, decreasing = TRUE)
+
+lambda1_hat <- eigen_hat_sorted[1] 
+sum_lambda_hat <- sum(eigen_hat_sorted)
+theta_hat <- lambda1_hat / sum_lambda_hat
+cat("θ的样本估计θ̂：", theta_hat, "\n")
+
+theta_boot_stat <- function(data, indices) {
+  boot_sample <- data[indices, ] 
+  n_boot <- nrow(boot_sample)
+  
+  sigma_boot_mle <- (n_boot - 1)/n_boot * cov(boot_sample)
+  
+  eigen_boot <- eigen(sigma_boot_mle)$values
+  eigen_boot_sorted <- sort(eigen_boot, decreasing = TRUE)
+  
+  lambda1_boot <- eigen_boot_sorted[1]
+  sum_lambda_boot <- sum(eigen_boot_sorted)
+  theta_star <- lambda1_boot / sum_lambda_boot
+  return(theta_star)
+}
+
+set.seed(8877)  
+boot_result <- boot(
+  data = X,        
+  statistic = theta_boot_stat, 
+  R = 10000        
+)
+
+bias <- mean(boot_result$t) - boot_result$t0  
+se <- sd(boot_result$t)               
+
+cat("Bootstrap偏差估计：", bias, "\n")
+cat("Bootstrap标准误估计：", se, "\n")
+
+print(boot_result)
+
+```
+
+### 3.3 结果分析
+
+Bootstrap 结果显示，原始估计\(\hat{\theta}\)存在轻微的低估偏差（偏差约 0.0438），但偏差程度在可接受范围内；估计的标准误较小（约 2.61%），说明\(\hat{\theta}\)的抽样稳定性较好，整体估计结果可靠。

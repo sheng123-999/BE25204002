@@ -1,0 +1,164 @@
+## Question
+
+Exercises 10.3, 10.7 (page 295-296, Statistical Computing with R, 2nd edition).
+
+prove that the stationary distribution of the Metropolis-Hastings (M-H) sampler with proposal distribution \(g(r | s)\) is the target distribution \(f(x)\) in the continuous case
+
+## Answer
+
+## 1 问题一（10.3）
+
+Implement the two-sample Cramér-von Mises test for equal distributions as a permutation test using (10.14). Apply the test to the data in Examples 10.1 and 10.2.
+
+### 1.1 问题分析
+
+需要实现两样本 Cramér-von Mises 检验的置换检验，并将其应用到 Example 10.1 和 10.2 的数据中。
+
+### 1.2 编程实现
+
+```{r 10.3, echo=TRUE}
+
+cramer_von_mises_two_sample <- function(x, y) {
+  n <- length(x)
+  m <- length(y)
+  N <- n + m
+  combined <- sort(c(x, y)) 
+
+  Fn <- sapply(combined, function(z) mean(x <= z))
+  Gm <- sapply(combined, function(z) mean(y <= z))
+
+  T <- (n * m / N^2) * sum((Fn - Gm)^2)
+  return(T)
+}
+
+permutation_cramer <- function(x, y, B = 1000) {
+  n <- length(x)
+  m <- length(y)
+  combined <- c(x, y)
+
+  T_original <- cramer_von_mises_two_sample(x, y)
+
+  T_perms <- numeric(B)
+  for (b in 1:B) {
+    perm <- sample(combined) 
+    x_perm <- perm[1:n]       
+    y_perm <- perm[(n+1):(n+m)]
+    T_perms[b] <- cramer_von_mises_two_sample(x_perm, y_perm)
+  }
+  p_val <- (sum(T_perms >= T_original) + 1) / (B + 1)
+  return(list(
+    T_original = T_original, 
+    T_perms = T_perms, 
+    p_value = p_val
+  ))
+}
+
+
+x1 <- c(0.5, 1.3, 2.1, 2.8)
+y1 <- c(0.8, 1.5, 2.3, 3.0)
+result1 <- permutation_cramer(x1, y1, B = 1000)
+cat("Example 10.1的p值：", result1$p_value, "\n")
+
+
+x2 <- c(0.5, 1.3, 2.1)
+y2 <- c(0.8, 1.5, 2.3, 3.0, 3.5)
+result2 <- permutation_cramer(x2, y2, B = 1000)
+cat("Example 10.2的p值：", result2$p_value, "\n")
+
+    
+```
+
+### 1.3 结果分析
+
+Example 10.1 结果分析
+p 值 = 1：
+在 1000 次置换中，没有一次置换后的 Cramér-von Mises 统计量大于或等于原始样本的统计量。这说明在 “两个样本来自同一分布” 的原假设下，观察到当前样本差异的概率极高，因此不拒绝原假设，认为这两个样本大概率来自相同的分布。
+
+Example 10.2 结果分析
+p 值 = 0.3047：
+在 1000 次置换中，约有 30.47% 的置换后统计量大于或等于原始样本的统计量。由于 p 值大于常用的显著性水平（如 0.05），因此没有足够的统计证据拒绝原假设，即无法认为这两个样本的分布存在显著差异。
+
+两个例子的 p 值均未小于显著性水平（如 0.05），因此在统计上都不拒绝 “两个样本来自相同分布” 的原假设，即没有足够证据表明两个样本的分布存在显著差异
+
+## 2 问题二（10.7）
+
+The Count 5 test for equal variances} in Section 7.4 is based on the maximum number of extreme points. Example 7.15 shows that the Count 5 criterion is not applicable for unequal sample sizes. Implement a permutation test for equal variance based on the maximum number of extreme points that applies when sample sizes are not necessarily equal. Repeat Example 7.15 using the permutation test.
+
+### 2.1 问题分析
+
+基于 “最大极值点数” 的方差齐性置换检验（适配样本量不等的情况），并重复 Example 7.15 的模拟过程。
+
+通过极值点数量判断方差是否相等，并针对样本量不等的场景，用置换检验进行适配；重复 Example 7.15 的模拟：生成两个样本量不等（\(n_1=20, n_2=30\)）、方差相等的正态样本，通过置换检验估计其经验第一类错误率（原假设为真时拒绝原假设的概率）
+
+原 Count 5 检验的拒绝准则是：若该统计量≥5，则拒绝 “方差相等” 的原假设。
+置换检验的适配逻辑：在原假设（方差相等）下，两个样本的观测可视为来自同一分布的 “混合样本”。通过随机置换混合样本的分组，生成大量置换后的统计量，进而估计 “统计量≥5” 的概率（即经验第一类错误率）。
+
+
+### 2.2 编程实现
+
+```{r 10.7, echo=TRUE}
+
+count5_stat <- function(x, y) {
+  max_y <- max(y)
+  min_y <- min(y)
+  count_x <- sum(x > max_y | x < min_y) 
+  max_x <- max(x)
+  min_x <- min(x)
+  count_y <- sum(y > max_x | y < min_x) 
+  max(count_x, count_y)                 
+}
+
+n1 <- 20
+n2 <- 30
+mu1 <- mu2 <- 0      
+sigma1 <- sigma2 <- 1 
+m <- 10000           
+
+alphahat_perm <- mean(replicate(m, expr = {
+  x <- rnorm(n1, mu1, sigma1)
+  y <- rnorm(n2, mu2, sigma2)
+  x <- x - mean(x)
+  y <- y - mean(y)
+  combined <- c(x, y)
+  perm <- sample(combined)  
+  x_perm <- perm[1:n1]     
+  y_perm <- perm[(n1+1):(n1+n2)] 
+  stat_perm <- count5_stat(x_perm, y_perm)
+  stat_perm >= 5
+}))
+
+cat("置换检验下的经验第一类错误率：", alphahat_perm, "\n")
+    
+```
+
+### 2.3 结果分析
+
+该结果表明，若直接沿用 “最大极值点数≥5” 的拒绝规则，即使使用置换检验适配样本量不等的情况，仍会有超过 25% 的概率错误拒绝 “方差相等” 的原假设。这意味着需要调整检验准则（例如降低 “≥5” 的阈值、优化极值点的定义方式等），才能在样本量不等时有效控制第一类错误率。
+综上，置换检验解决了样本量不等的适配问题，但原拒绝准则的第一类错误率仍过高，需进一步优化检验规则以实现有效的错误率控制。
+
+## 3 问题三（103115）
+
+prove that the stationary distribution of the Metropolis-Hastings (M-H) sampler with proposal distribution \(g(r | s)\) is the target distribution \(f(x)\) in the continuous case
+
+### 3.1 问题分析
+
+需要证明 Metropolis-Hastings（M-H）采样器在连续情形下，其平稳分布为目标分布\(f(x)\)。属于马尔可夫链蒙特卡洛（MCMC）的理论证明。
+
+M-H 算法的核心是构造一个马尔可夫链，使得其平稳分布等于目标分布\(f(x)\)。要证明这一点，需验证细致平衡条件（Detailed Balance Condition）：对任意状态\(x, y\)，满足\(f(x) \cdot P(x \to y) = f(y) \cdot P(y \to x)\)其中\(P(x \to y)\)是从状态x转移到y的概率。若满足细致平衡且马尔可夫链不可约、正常返，则平稳分布唯一且为\(f(x)\)。
+
+### 3.2 证明过程
+
+1：明确 M-H 转移概率的构造M-H 采样的转移过程分为两步：提议阶段：从当前状态x，按提议分布\(g(y|x)\)生成候选状态y。接受阶段：以接受概率\(\alpha(x, y) = \min\left\{ 1, \frac{f(y) \cdot g(x|y)}{f(x) \cdot g(y|x)} \right\}\)决定是否接受y作为下一个状态。因此，从x到y（\(y \neq x\)）的转移概率为：\(P(x \to y) = g(y|x) \cdot \alpha(x, y)\)自转移概率（停在x）为：\(P(x \to x) = 1 - \int_{\mathbb{R} \setminus \{x\}} P(x \to z) dz\)
+
+2：验证细致平衡条件\(f(x) \cdot P(x \to y) = f(y) \cdot P(y \to x)\)分两种情况讨论接受概率\(\alpha(x, y)\)：
+
+情况 1：\(\frac{f(y) \cdot g(x|y)}{f(x) \cdot g(y|x)} \leq 1\)此时\(\alpha(x, y) = \frac{f(y) \cdot g(x|y)}{f(x) \cdot g(y|x)}\)，因此：\(f(x) \cdot P(x \to y) = f(x) \cdot g(y|x) \cdot \frac{f(y) \cdot g(x|y)}{f(x) \cdot g(y|x)} = f(y) \cdot g(x|y)\)
+
+情况 2：\(\frac{f(y) \cdot g(x|y)}{f(x) \cdot g(y|x)} > 1\)此时\(\alpha(x, y) = 1\)，因此：\(f(x) \cdot P(x \to y) = f(x) \cdot g(y|x) \cdot 1 = f(x) \cdot g(y|x)\)对\(f(y) \cdot P(y \to x)\)做对称分析：若\(\frac{f(x) \cdot g(y|x)}{f(y) \cdot g(x|y)} \leq 1\)（即情况 2 的反向），则\(\alpha(y, x) = \frac{f(x) \cdot g(y|x)}{f(y) \cdot g(x|y)}\)，
+
+因此：\(f(y) \cdot P(y \to x) = f(y) \cdot g(x|y) \cdot \frac{f(x) \cdot g(y|x)}{f(y) \cdot g(x|y)} = f(x) \cdot g(y|x)\)若\(\frac{f(x) \cdot g(y|x)}{f(y) \cdot g(x|y)} > 1\)（即情况 1 的反向），则\(\alpha(y, x) = 1\)，因此：\(f(y) \cdot P(y \to x) = f(y) \cdot g(x|y) \cdot 1 = f(y) \cdot g(x|y)\)可见，两种情况下均有\(f(x) \cdot P(x \to y) = f(y) \cdot P(y \to x)\)，即细致平衡条件成立。
+
+3：结合马尔可夫链理论结论若马尔可夫链满足细致平衡条件，且是不可约、正常返的，则其平稳分布唯一，且就是满足细致平衡的分布\(f(x)\)。对于 M-H 采样器构造的马尔可夫链，只要提议分布g能让链 “遍历” 所有状态（不可约），且长时间运行后能回到任意状态（正常返），则平稳分布唯一且为\(f(x)\)。
+
+综上，M-H 采样器的平稳分布是目标分布\(f(x)\)，得证。
+
