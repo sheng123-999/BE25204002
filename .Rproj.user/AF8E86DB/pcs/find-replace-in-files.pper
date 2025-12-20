@@ -1,6 +1,6 @@
 {
     "dialog-state": {
-        "query": "library(Rcpp)",
+        "query": " non_dominated_sort_fronts",
         "path": "",
         "regex": false,
         "caseSensitive": false,
@@ -9,7 +9,7 @@
         "useGitGrep": true,
         "excludeGitIgnore": true,
         "excludeFilePatterns": [],
-        "resultsCount": 1,
+        "resultsCount": 6,
         "errorCount": 0,
         "replaceErrors": "",
         "projectRelative": true
