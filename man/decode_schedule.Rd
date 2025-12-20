@@ -2,7 +2,7 @@
 % Please edit documentation in R/decode_schedule.R
 \name{decode_schedule}
 \alias{decode_schedule}
-\title{解码粒子并计算多目标适应度（4PL物流调度优化）}
+\title{Decode Particle and Calculate Multi-Objective Fitness (4PL Logistics Scheduling Optimization)}
 \usage{
 decode_schedule(
   particle,
@@ -15,80 +15,96 @@ decode_schedule(
 )
 }
 \arguments{
-\item{particle}{列表，单个粒子对象，包含position（子任务-资源映射）、velocity等属性。}
+\item{particle}{List, a single particle object containing attributes such as position (subtask-resource mapping) and velocity.}
 
-\item{tasks}{列表，物流任务集合，每个任务包含：
+\item{tasks}{List, collection of logistics tasks, each task includes:
 \itemize{
-\item priority：任务优先级（1-3，3为最高）；
-\item due_date：任务截止时间；
-\item delay_penalty：延迟惩罚系数；
-\item activities：子任务列表，每个子任务包含名称和可用资源的执行时间/成本/需求；
-\item relationships：子任务间的依赖关系（0表示串行，1表示并行）。
+\item priority: Task priority (1-3, 3 is the highest);
+\item due_date: Task deadline;
+\item delay_penalty: Delay penalty coefficient;
+\item activities: List of subtasks, each subtask includes name and execution time/cost/demand of available resources;
+\item relationships: Dependencies between subtasks (0 for serial, 1 for parallel).
 }}
 
-\item{self_resource}{列表，自有资源信息，每个资源包含capacity（容量）属性。}
+\item{self_resource}{List, information of self-owned resources, each resource includes a 'capacity' attribute.}
 
-\item{outsourced_resource}{列表，外包资源信息，每个资源包含capacity（容量）和cost_ratio（成本系数）属性。}
+\item{outsourced_resource}{List, information of outsourced resources, each resource includes 'capacity' and 'cost_ratio' attributes.}
 
-\item{resource_windows}{列表，资源时间窗口，每个资源对应一个二元向量（开始时间，结束时间）。}
+\item{resource_windows}{List, resource time windows, each resource corresponds to a binary vector (start time, end time).}
 
-\item{resource_joint_cost}{列表，资源切换成本，键为“资源A,资源B”，值为二元向量（切换时间，切换成本）。}
+\item{resource_joint_cost}{List, resource switching costs, with keys as "ResourceA,ResourceB" and values as binary vectors (switching time, switching cost).}
 
-\item{resource_mapping}{列表，自有资源到外包资源的映射（如M1 = "O1"）。}
+\item{resource_mapping}{List, mapping from self-owned resources to outsourced resources (e.g., M1 = "O1").}
 }
 \value{
-列表，包含：
+List containing:
 \itemize{
-\item fitness：数值向量，长度为6（总成本、总时间、利用率方差、直接成本、连接成本、延迟惩罚）；
-\item schedule：列表，任务名称到子任务详情的映射（每个子任务包含start、end、resource、cost、demand、outsourced_amount等）。
+\item fitness: Numeric vector (named) of length 6, with names:
+"total_cost", "total_time", "util_variance", "total_direct_cost", "total_connection_cost", "total_delay_penalty";
+\item schedule: List, mapping from task names to subtask details (each subtask includes start, end, resource, cost, demand, outsourced_amount, etc.).
 }
 }
 \description{
-针对第四方物流（4PL）的多目标资源调度问题，该函数将粒子的位置（资源分配方案）解码，
-计算包含总成本、总完成时间、资源负载方差等6个目标的适应度向量，同时考虑任务优先级、
-资源时间窗口、依赖关系、切换成本等约束条件。
+For the multi-objective resource scheduling problem of Fourth-Party Logistics (4PL), this function decodes the particle's position (resource allocation scheme),
+calculates a fitness vector of 6 objectives including total cost, total completion time, resource load variance, direct cost, connection cost, and delay penalty,
+while considering constraints such as task priority, resource time windows, dependencies, and switching costs.
 }
 \details{
-该函数是4PL物流调度多目标优化的核心解码函数，实现了对粒子位置的解析和多目标适应度的计算，
-考虑了任务依赖、资源冲突、优先级约束等实际物流场景中的关键因素。适应度向量越小，代表调度方案越优。
+This function is the core decoding function for multi-objective optimization of 4PL logistics scheduling,
+implementing the parsing of particle positions and the calculation of multi-objective fitness.
+It considers key factors in actual logistics scenarios such as task dependencies, resource conflicts, and priority constraints.
+A smaller fitness vector indicates a better scheduling scheme.
 }
 \examples{
-# 构建示例数据
+# Build example data
 resource_mapping <- list(M1 = "O1", M2 = "O2")
 tasks <- list(
-task1 = list(
-priority = 2,
-due_date = 10,
-delay_penalty = 5,
-activities = list(
-list("subtask1_1", list(M1 = c(2.0, 10.0, 2), O1 = c(1.0, 20.0, 2))),
-list("subtask1_2", list(M2 = c(3.0, 15.0, 3), O2 = c(2.0, 25.0, 3)))
-),
-relationships = c(0)
-)
+  task1 = list(
+    priority = 2,
+    due_date = 10,
+    delay_penalty = 5,
+    activities = list(
+      list("subtask1_1", list(M1 = c(2.0, 10.0, 2), O1 = c(1.0, 20.0, 2))),
+      list("subtask1_2", list(M2 = c(3.0, 15.0, 3), O2 = c(2.0, 25.0, 3)))
+    ),
+    relationships = c(0)
+  )
 )
 self_resource <- list(M1 = list(capacity = 4), M2 = list(capacity = 5))
 outsourced_resource <- list(
-O1 = list(capacity = 10, cost_ratio = 1.2),
-O2 = list(capacity = 10, cost_ratio = 1.2)
+  O1 = list(capacity = 10, cost_ratio = 1.2),
+  O2 = list(capacity = 10, cost_ratio = 1.2)
 )
 resource_windows <- list(M1 = c(0.0, 20.0), M2 = c(0.0, 20.0), O1 = c(0.0, 20.0), O2 = c(0.0, 20.0))
 resource_joint_cost <- list("M1,M1" = c(0.0, 0.0), "M1,O1" = c(1.0, 5.0))
 
-# 初始化粒子
+# Mock initialize_particles function (for example independence)
+initialize_particles <- function(pop_size, tasks, resource_mapping) {
+  subtask_names <- unlist(lapply(tasks, function(x) lapply(x$activities, `[[`, 1)))
+  lapply(1:pop_size, function(i) {
+    list(
+      position = setNames(sample(c(names(self_resource), names(outsourced_resource)),
+                                length(subtask_names), replace = TRUE),
+                         subtask_names),
+      velocity = NULL
+    )
+  })
+}
+
+# Initialize particles
 particles <- initialize_particles(pop_size = 1, tasks = tasks, resource_mapping = resource_mapping)
 
-# 解码粒子并计算适应度
+# Decode particle and calculate fitness
 result <- decode_schedule(
-particle = particles[[1]],
-tasks = tasks,
-self_resource = self_resource,
-outsourced_resource = outsourced_resource,
-resource_windows = resource_windows,
-resource_joint_cost = resource_joint_cost,
-resource_mapping = resource_mapping
+  particle = particles[[1]],
+  tasks = tasks,
+  self_resource = self_resource,
+  outsourced_resource = outsourced_resource,
+  resource_windows = resource_windows,
+  resource_joint_cost = resource_joint_cost,
+  resource_mapping = resource_mapping
 )
-print(result$fitness)
+print(result$fitness) # Now has named columns
 print(result$schedule)
 
 }

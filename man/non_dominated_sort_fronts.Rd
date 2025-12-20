@@ -2,16 +2,128 @@
 % Please edit documentation in R/non_dominated_sort.R
 \name{non_dominated_sort_fronts}
 \alias{non_dominated_sort_fronts}
-\title{非支配排序（返回Pareto前沿列表，与Python一致）}
+\title{非支配排序（返回前沿列表）}
 \usage{
 non_dominated_sort_fronts(particles)
 }
 \arguments{
-\item{particles}{列表，粒子群}
+\item{particles}{列表，每个元素是包含"fitness"数值向量的粒子（如 list(fitness = c(1,2), position = ...)）。}
 }
 \value{
-列表，每个元素是前沿的粒子子列表
+列表，每个元素是对应等级的粒子子列表，列表长度为前沿的最大等级数。
 }
 \description{
+对粒子群进行非支配排序，返回按等级划分的Pareto前沿列表，每个元素为对应等级的粒子子列表（等级1为最优前沿）。
+}
+\details{
 非支配排序（返回Pareto前沿列表，与Python一致）
+}
+\examples{
+# 加载依赖函数（实际包中需确保dominates和non_dominated_sort已导出）
+dominates <- function(a, b) {
+  if (length(a) != length(b)) stop("Fitness vectors must have the same length.")
+  has_better <- FALSE
+  for (i in seq_along(a)) {
+    if (a[i] > b[i]) return(FALSE)
+    else if (a[i] < b[i]) has_better <- TRUE
+  }
+  return(has_better)
+}
+
+non_dominated_sort <- function(particles) {
+  if (!all(sapply(particles, function(x) "fitness" \%in\% names(x)))) {
+    stop("每个粒子必须包含'fitness'元素")
+  }
+  fitness_lengths <- sapply(particles, function(x) length(x$fitness))
+  if (length(unique(fitness_lengths)) > 1) {
+    stop("所有粒子的'fitness'向量长度必须一致")
+  }
+  n <- length(particles)
+  if (n == 0) stop("Particle set must not be empty.")
+  
+  dom_set <- vector("list", n)
+  dom_count <- integer(n)
+  
+  for (i in seq_len(n)) {
+    f1 <- particles[[i]][["fitness"]]
+    for (j in seq_len(n)) {
+      if (i == j) next
+      f2 <- particles[[j]][["fitness"]]
+      if (dominates(f1, f2)) {
+        dom_set[[i]] <- c(dom_set[[i]], j)
+      } else if (dominates(f2, f1)) {
+        dom_count[i] <- dom_count[i] + 1
+      }
+    }
+  }
+  
+  rank <- integer(n)
+  rank[] <- 1
+  current_front <- which(dom_count == 0)
+  front <- 1
+  
+  while (length(current_front) > 0) {
+    next_front <- integer(0)
+    for (i in current_front) {
+      for (j in dom_set[[i]]) {
+        dom_count[j] <- dom_count[j] - 1
+        if (dom_count[j] == 0) {
+          rank[j] <- front + 1
+          next_front <- c(next_front, j)
+        }
+      }
+    }
+    front <- front + 1
+    current_front <- next_front
+  }
+  return(rank)
+}
+
+# 示例1：常规场景（多层前沿，6个粒子）
+set.seed(123)
+particles <- list(
+  list(fitness = c(2, 3), position = c(0.1, 0.2)),  # 等级2
+  list(fitness = c(1, 2), position = c(0.3, 0.4)),  # 等级1
+  list(fitness = c(3, 1), position = c(0.5, 0.6)),  # 等级1
+  list(fitness = c(4, 5), position = c(0.7, 0.8)),  # 等级3
+  list(fitness = c(2, 2), position = c(0.9, 0.1)),  # 等级1
+  list(fitness = c(5, 6), position = c(0.2, 0.3))   # 等级4
+)
+
+# 计算Pareto前沿列表
+fronts <- non_dominated_sort_fronts(particles)
+
+# 查看各前沿的粒子数量
+sapply(fronts, length)  # 输出：3 1 1 1（等级1有3个粒子，等级2-4各1个）
+
+# 查看等级1前沿的粒子适应度
+lapply(fronts[[1]], function(p) p$fitness)
+
+# 示例2：边界场景1（单个粒子）
+particles_single <- list(list(fitness = c(1, 2), position = c(0.1, 0.2)))
+fronts_single <- non_dominated_sort_fronts(particles_single)
+length(fronts_single)  # 输出：1（仅1个前沿）
+sapply(fronts_single, length)  # 输出：1（前沿1有1个粒子）
+
+# 示例3：边界场景2（所有粒子无支配关系，单前沿）
+particles_no_dom <- list(
+  list(fitness = c(1, 4)),
+  list(fitness = c(2, 3)),
+  list(fitness = c(3, 2)),
+  list(fitness = c(4, 1))
+)
+fronts_no_dom <- non_dominated_sort_fronts(particles_no_dom)
+length(fronts_no_dom)  # 输出：1（所有粒子同属等级1）
+sapply(fronts_no_dom, length)  # 输出：4（前沿1有4个粒子）
+
+# 示例4：三维目标的非支配排序（多层前沿）
+particles_3d <- list(
+  list(fitness = c(1, 2, 3)),  # 等级1
+  list(fitness = c(2, 2, 2)),  # 等级1
+  list(fitness = c(1, 3, 4)),  # 等级2
+  list(fitness = c(3, 1, 2)),  # 等级1
+  list(fitness = c(4, 5, 6))   # 等级3
+)
+fronts_3d <- non_dominated_sort_fronts(particles_3d)
+sapply(fronts_3d, length)  # 输出：3 1 1（等级1有3个，等级2-3各1个）
 }

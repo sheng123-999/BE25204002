@@ -1,6 +1,6 @@
 {
     "dialog-state": {
-        "query": " non_dominated_sort_fronts",
+        "query": "pareto_fitness <- do.call",
         "path": "",
         "regex": false,
         "caseSensitive": false,
@@ -9,7 +9,7 @@
         "useGitGrep": true,
         "excludeGitIgnore": true,
         "excludeFilePatterns": [],
-        "resultsCount": 6,
+        "resultsCount": 2,
         "errorCount": 0,
         "replaceErrors": "",
         "projectRelative": true

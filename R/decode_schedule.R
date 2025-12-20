@@ -1,83 +1,101 @@
-#' 解码粒子并计算多目标适应度（4PL物流调度优化）
+#' Decode Particle and Calculate Multi-Objective Fitness (4PL Logistics Scheduling Optimization)
 #'
-#' 针对第四方物流（4PL）的多目标资源调度问题，该函数将粒子的位置（资源分配方案）解码，
-#' 计算包含总成本、总完成时间、资源负载方差等6个目标的适应度向量，同时考虑任务优先级、
-#' 资源时间窗口、依赖关系、切换成本等约束条件。
+#' For the multi-objective resource scheduling problem of Fourth-Party Logistics (4PL), this function decodes the particle's position (resource allocation scheme),
+#' calculates a fitness vector of 6 objectives including total cost, total completion time, resource load variance, direct cost, connection cost, and delay penalty,
+#' while considering constraints such as task priority, resource time windows, dependencies, and switching costs.
 #'
-#' @param particle 列表，单个粒子对象，包含position（子任务-资源映射）、velocity等属性。
-#' @param tasks 列表，物流任务集合，每个任务包含：
+#' @param particle List, a single particle object containing attributes such as position (subtask-resource mapping) and velocity.
+#' @param tasks List, collection of logistics tasks, each task includes:
 #' \itemize{
-#' \item priority：任务优先级（1-3，3为最高）；
-#' \item due_date：任务截止时间；
-#' \item delay_penalty：延迟惩罚系数；
-#' \item activities：子任务列表，每个子任务包含名称和可用资源的执行时间/成本/需求；
-#' \item relationships：子任务间的依赖关系（0表示串行，1表示并行）。
+#' \item priority: Task priority (1-3, 3 is the highest);
+#' \item due_date: Task deadline;
+#' \item delay_penalty: Delay penalty coefficient;
+#' \item activities: List of subtasks, each subtask includes name and execution time/cost/demand of available resources;
+#' \item relationships: Dependencies between subtasks (0 for serial, 1 for parallel).
 #' }
-#' @param self_resource 列表，自有资源信息，每个资源包含capacity（容量）属性。
-#' @param outsourced_resource 列表，外包资源信息，每个资源包含capacity（容量）和cost_ratio（成本系数）属性。
-#' @param resource_windows 列表，资源时间窗口，每个资源对应一个二元向量（开始时间，结束时间）。
-#' @param resource_joint_cost 列表，资源切换成本，键为“资源A,资源B”，值为二元向量（切换时间，切换成本）。
-#' @param resource_mapping 列表，自有资源到外包资源的映射（如M1 = "O1"）。
+#' @param self_resource List, information of self-owned resources, each resource includes a 'capacity' attribute.
+#' @param outsourced_resource List, information of outsourced resources, each resource includes 'capacity' and 'cost_ratio' attributes.
+#' @param resource_windows List, resource time windows, each resource corresponds to a binary vector (start time, end time).
+#' @param resource_joint_cost List, resource switching costs, with keys as "ResourceA,ResourceB" and values as binary vectors (switching time, switching cost).
+#' @param resource_mapping List, mapping from self-owned resources to outsourced resources (e.g., M1 = "O1").
 #'
-#' @return 列表，包含：
+#' @return List containing:
 #' \itemize{
-#' \item fitness：数值向量，长度为6（总成本、总时间、利用率方差、直接成本、连接成本、延迟惩罚）；
-#' \item schedule：列表，任务名称到子任务详情的映射（每个子任务包含start、end、resource、cost、demand、outsourced_amount等）。
+#' \item fitness: Numeric vector (named) of length 6, with names:
+#'   "total_cost", "total_time", "util_variance", "total_direct_cost", "total_connection_cost", "total_delay_penalty";
+#' \item schedule: List, mapping from task names to subtask details (each subtask includes start, end, resource, cost, demand, outsourced_amount, etc.).
 #' }
 #'
-#' @details 该函数是4PL物流调度多目标优化的核心解码函数，实现了对粒子位置的解析和多目标适应度的计算，
-#' 考虑了任务依赖、资源冲突、优先级约束等实际物流场景中的关键因素。适应度向量越小，代表调度方案越优。
+#' @details This function is the core decoding function for multi-objective optimization of 4PL logistics scheduling,
+#' implementing the parsing of particle positions and the calculation of multi-objective fitness.
+#' It considers key factors in actual logistics scenarios such as task dependencies, resource conflicts, and priority constraints.
+#' A smaller fitness vector indicates a better scheduling scheme.
 #'
 #' @examples
-#' # 构建示例数据
+#' # Build example data
 #' resource_mapping <- list(M1 = "O1", M2 = "O2")
 #' tasks <- list(
-#' task1 = list(
-#' priority = 2,
-#' due_date = 10,
-#' delay_penalty = 5,
-#' activities = list(
-#' list("subtask1_1", list(M1 = c(2.0, 10.0, 2), O1 = c(1.0, 20.0, 2))),
-#' list("subtask1_2", list(M2 = c(3.0, 15.0, 3), O2 = c(2.0, 25.0, 3)))
-#' ),
-#' relationships = c(0)
-#' )
+#'   task1 = list(
+#'     priority = 2,
+#'     due_date = 10,
+#'     delay_penalty = 5,
+#'     activities = list(
+#'       list("subtask1_1", list(M1 = c(2.0, 10.0, 2), O1 = c(1.0, 20.0, 2))),
+#'       list("subtask1_2", list(M2 = c(3.0, 15.0, 3), O2 = c(2.0, 25.0, 3)))
+#'     ),
+#'     relationships = c(0)
+#'   )
 #' )
 #' self_resource <- list(M1 = list(capacity = 4), M2 = list(capacity = 5))
 #' outsourced_resource <- list(
-#' O1 = list(capacity = 10, cost_ratio = 1.2),
-#' O2 = list(capacity = 10, cost_ratio = 1.2)
+#'   O1 = list(capacity = 10, cost_ratio = 1.2),
+#'   O2 = list(capacity = 10, cost_ratio = 1.2)
 #' )
 #' resource_windows <- list(M1 = c(0.0, 20.0), M2 = c(0.0, 20.0), O1 = c(0.0, 20.0), O2 = c(0.0, 20.0))
 #' resource_joint_cost <- list("M1,M1" = c(0.0, 0.0), "M1,O1" = c(1.0, 5.0))
 #'
-#' # 初始化粒子
+#' # Mock initialize_particles function (for example independence)
+#' initialize_particles <- function(pop_size, tasks, resource_mapping) {
+#'   subtask_names <- unlist(lapply(tasks, function(x) lapply(x$activities, `[[`, 1)))
+#'   lapply(1:pop_size, function(i) {
+#'     list(
+#'       position = setNames(sample(c(names(self_resource), names(outsourced_resource)),
+#'                                 length(subtask_names), replace = TRUE),
+#'                          subtask_names),
+#'       velocity = NULL
+#'     )
+#'   })
+#' }
+#'
+#' # Initialize particles
 #' particles <- initialize_particles(pop_size = 1, tasks = tasks, resource_mapping = resource_mapping)
 #'
-#' # 解码粒子并计算适应度
+#' # Decode particle and calculate fitness
 #' result <- decode_schedule(
-#' particle = particles[[1]],
-#' tasks = tasks,
-#' self_resource = self_resource,
-#' outsourced_resource = outsourced_resource,
-#' resource_windows = resource_windows,
-#' resource_joint_cost = resource_joint_cost,
-#' resource_mapping = resource_mapping
+#'   particle = particles[[1]],
+#'   tasks = tasks,
+#'   self_resource = self_resource,
+#'   outsourced_resource = outsourced_resource,
+#'   resource_windows = resource_windows,
+#'   resource_joint_cost = resource_joint_cost,
+#'   resource_mapping = resource_mapping
 #' )
-#' print(result$fitness)
+#' print(result$fitness) # Now has named columns
 #' print(result$schedule)
 #'
 #' @export
 decode_schedule <- function(particle, tasks, self_resource, outsourced_resource,
                             resource_windows, resource_joint_cost, resource_mapping) {
-  # 初始化变量
+  # Initialize variables
   total_direct_cost <- 0.0
   total_connection_cost <- 0.0
   total_delay_penalty <- 0.0
   total_time <- 0.0
-  schedule <- list() # 记录schedule
+  schedule <- list() # Record schedule
   resource_timeline <- list()
   all_resources <- c(names(self_resource), names(outsourced_resource))
+  
+  # Initialize resource timeline (capacity and usage)
   for (res in all_resources) {
     resource_timeline[[res]] <- list(
       usage = list(),
@@ -86,15 +104,16 @@ decode_schedule <- function(particle, tasks, self_resource, outsourced_resource,
                         outsourced_resource[[res]]$capacity)
     )
   }
-  # 子任务时间记录
-  subtask_end_times <- list()
-  subtask_start_times <- list()
-  for (task_name in names(tasks)) {
-    subtask_end_times[[task_name]] <- list()
-    subtask_start_times[[task_name]] <- list()
-    schedule[[task_name]] <- list() # 每个任务的子任务列表
-  }
-  # 依赖关系解析
+  
+  # Subtask time records
+  subtask_end_times <- lapply(names(tasks), function(x) list())
+  subtask_start_times <- lapply(names(tasks), function(x) list())
+  names(subtask_end_times) <- names(tasks)
+  names(subtask_start_times) <- names(tasks)
+  schedule <- lapply(names(tasks), function(x) list())
+  names(schedule) <- names(tasks)
+  
+  # Parse dependencies between subtasks
   dependency <- list()
   for (task_name in names(tasks)) {
     task <- tasks[[task_name]]
@@ -110,94 +129,106 @@ decode_schedule <- function(particle, tasks, self_resource, outsourced_resource,
       dependency[[activities[[i]][[1]]]] <- current_dep
     }
   }
-  # 按优先级排序任务
+  
+  # Sort tasks by priority (descending)
   sorted_tasks <- names(tasks)[order(sapply(tasks, function(x) x$priority), decreasing = TRUE)]
-  # 处理每个任务的子任务
+  
+  # Process each subtask of each task
   for (task_name in sorted_tasks) {
     task <- tasks[[task_name]]
     for (idx in seq_along(task$activities)) {
       subtask <- task$activities[[idx]]
       subtask_name <- subtask[[1]]
       res <- particle$position[[subtask_name]]
-      if (is.null(res)) next
+      
+      # Skip if resource is not assigned
+      if (is.null(res) || !res %in% names(subtask[[2]])) {
+        next
+      }
+      
+      # Get resource information for the subtask
       res_info <- subtask[[2]][[res]]
-      process_time <- round(res_info[1], 1) # 处理时间（保留1位小数）
+      process_time <- round(res_info[1], 1) # Processing time (1 decimal place)
       base_cost <- res_info[2]
-      demand <- as.integer(res_info[3]) # 资源需求（整数）
-      # 资源时间窗口
+      demand <- as.integer(res_info[3]) # Resource demand (integer)
+      
+      # Resource time window
       time_window <- resource_windows[[res]]
       S_Mi <- round(time_window[1], 1)
       E_Mi <- round(time_window[2], 1)
-      # 计算直接成本
+      
+      # Calculate direct cost (consider priority and outsourcing)
       cost <- base_cost
-      if (task$priority == 3 && grepl("^O", res)) {
-        cost <- base_cost * outsourced_resource[[res]]$cost_ratio
-      } else if (task$priority == 3 && grepl("^M", res)) {
-        mapped_res <- resource_mapping[[res]]
-        if (!is.null(mapped_res) && mapped_res %in% names(subtask[[2]])) {
-          mapped_info <- subtask[[2]][[mapped_res]]
-          cost <- mapped_info[2] * outsourced_resource[[mapped_res]]$cost_ratio
+      if (task$priority == 3) {
+        if (grepl("^O", res)) {
+          cost <- base_cost * outsourced_resource[[res]]$cost_ratio
+        } else if (grepl("^M", res)) {
+          mapped_res <- resource_mapping[[res]]
+          if (!is.null(mapped_res) && mapped_res %in% names(subtask[[2]])) {
+            mapped_info <- subtask[[2]][[mapped_res]]
+            cost <- mapped_info[2] * outsourced_resource[[mapped_res]]$cost_ratio
+          }
         }
       }
-      # 处理依赖关系
+      
+      # Handle dependency relationships and switching costs
       start_time <- S_Mi
       dep_subtask <- dependency[[subtask_name]]
       if (!is.null(dep_subtask)) {
         dep_end <- subtask_end_times[[task_name]][[dep_subtask]]
         if (is.null(dep_end)) {
-          return(list(fitness = rep(Inf, 6), schedule = list())) # 依赖错误，返回无穷大
+          # Return infinite fitness for dependency errors
+          fitness <- setNames(rep(Inf, 6),
+                              c("total_cost", "total_time", "util_variance",
+                                "total_direct_cost", "total_connection_cost", "total_delay_penalty"))
+          return(list(fitness = fitness, schedule = list()))
         }
-        prev_res <- NULL
-        for (act in task$activities) {
-          if (act[[1]] == dep_subtask) {
-            prev_res <- particle$position[[dep_subtask]]
-            break
-          }
-        }
+        # Get previous resource
+        prev_res <- particle$position[[dep_subtask]]
         if (is.null(prev_res)) prev_res <- res
+        # Calculate switching cost and time
         joint_key <- paste(prev_res, res, sep = ",")
-        joint_info <- resource_joint_cost[[joint_key]]
-        if (is.null(joint_info)) joint_info <- c(0.0, 0.0)
+        joint_info <- resource_joint_cost[[joint_key]] %||% c(0.0, 0.0)
         joint_time <- round(joint_info[1], 1)
         joint_cost <- joint_info[2]
         start_time <- max(start_time, round(dep_end + joint_time, 1))
         total_connection_cost <- total_connection_cost + joint_cost
       }
-      # 资源冲突处理
+      
+      # Handle resource conflicts and outsourcing
       available_capacity <- as.integer(resource_timeline[[res]]$capacity)
-      existing_usage <- 0
-      t_key <- as.character(start_time)
-      if (t_key %in% names(resource_timeline[[res]]$usage)) {
-        existing_usage <- resource_timeline[[res]]$usage[[t_key]]
-      }
+      existing_usage <- sum(unlist(resource_timeline[[res]]$usage[as.character(seq(floor(start_time), ceiling(start_time), by = 1))]), na.rm = TRUE)
       total_demand <- existing_usage + demand
       outsourced_amount <- max(0, total_demand - available_capacity)
-      # 计算外包成本
+      
+      # Calculate outsourcing cost for self-owned resources
       if (grepl("^M", res) && outsourced_amount > 0) {
         outsourced_res <- resource_mapping[[res]]
-        outsourcing_cost <- outsourced_amount * outsourced_resource[[outsourced_res]]$cost_ratio
-        cost <- cost + outsourcing_cost
-      }
-      # 计算结束时间
-      end_time <- round(start_time + process_time, 1)
-      # 更新资源时间线
-      for (t in seq(floor(start_time), ceiling(end_time), by = 1)) {
-        t_key <- as.character(t)
-        if (t_key %in% names(resource_timeline[[res]]$usage)) {
-          resource_timeline[[res]]$usage[[t_key]] <- min(
-            resource_timeline[[res]]$usage[[t_key]] + demand,
-            available_capacity
-          )
-        } else {
-          resource_timeline[[res]]$usage[[t_key]] <- min(demand, available_capacity)
+        if (!is.null(outsourced_res) && outsourced_res %in% names(outsourced_resource)) {
+          outsourcing_cost <- outsourced_amount * outsourced_resource[[outsourced_res]]$cost_ratio
+          cost <- cost + outsourcing_cost
         }
       }
-      # 记录到schedule
+      
+      # Calculate end time
+      end_time <- round(start_time + process_time, 1)
+      
+      # Update resource timeline (usage)
+      for (t in seq(floor(start_time), ceiling(end_time), by = 1)) {
+        t_key <- as.character(t)
+        resource_timeline[[res]]$usage[[t_key]] <- min(
+          sum(resource_timeline[[res]]$usage[[t_key]], existing_usage, demand, na.rm = TRUE),
+          available_capacity
+        )
+      }
+      
+      # Record subtask details to schedule
       outsourced <- list()
       if (grepl("^M", res) && outsourced_amount > 0) {
         outsourced_res <- resource_mapping[[res]]
         outsourced[[outsourced_res]] <- outsourced_amount
       }
+      
       schedule[[task_name]][[idx]] <- list(
         subtask = subtask_name,
         start = start_time,
@@ -211,24 +242,31 @@ decode_schedule <- function(particle, tasks, self_resource, outsourced_resource,
         priority = task$priority,
         outsourced_amount = outsourced_amount
       )
+      
+      # Update subtask time records
       subtask_start_times[[task_name]][[subtask_name]] <- start_time
       subtask_end_times[[task_name]][[subtask_name]] <- end_time
+      
+      # Accumulate direct cost
       total_direct_cost <- total_direct_cost + cost
     }
-    # 计算任务延迟惩罚
-    if (length(subtask_end_times[[task_name]]) > 0) {
-      task_end <- max(unlist(subtask_end_times[[task_name]]))
+    
+    # Calculate task delay penalty
+    task_end_times <- unlist(subtask_end_times[[task_name]])
+    if (length(task_end_times) > 0) {
+      task_end <- max(task_end_times)
       total_time <- max(total_time, task_end)
       delay <- max(0, task_end - task$due_date)
       total_delay_penalty <- total_delay_penalty + task$delay_penalty * delay
     }
   }
-  # 计算资源利用率方差
+  
+  # Calculate resource utilization variance (for self-owned resources)
   utilization_rates <- c()
   for (res in names(self_resource)) {
     usage <- unlist(resource_timeline[[res]]$usage)
     capacity <- self_resource[[res]]$capacity
-    if (capacity == 0) next
+    if (capacity == 0 || length(usage) == 0) next
     util <- mean(usage / capacity, na.rm = TRUE)
     utilization_rates <- c(utilization_rates, util)
   }
@@ -237,14 +275,31 @@ decode_schedule <- function(particle, tasks, self_resource, outsourced_resource,
   } else {
     0.0
   }
-  # 总目标计算
+  
+  # Calculate total cost (sum of all costs)
   total_cost <- total_direct_cost + total_connection_cost + total_delay_penalty
-  # 异常值处理
+  
+  # Handle abnormal values (infinite cost)
   if (total_cost > 99999) {
-    return(list(fitness = rep(Inf, 6), schedule = list()))
+    fitness <- setNames(rep(Inf, 6),
+                        c("total_cost", "total_time", "util_variance",
+                          "total_direct_cost", "total_connection_cost", "total_delay_penalty"))
+    return(list(fitness = fitness, schedule = list()))
   }
+  
+  # Return fitness vector WITH NAMES (key fix for the index error)
+  fitness <- setNames(
+    c(total_cost, total_time, util_variance, total_direct_cost, total_connection_cost, total_delay_penalty),
+    c("total_cost", "total_time", "util_variance", "total_direct_cost", "total_connection_cost", "total_delay_penalty")
+  )
+  
   list(
-    fitness = c(total_cost, total_time, util_variance, total_direct_cost, total_connection_cost, total_delay_penalty),
+    fitness = fitness,
     schedule = schedule
   )
+}
+
+# Helper function: Safe null check (equivalent to %||% in purrr)
+`%||%` <- function(x, y) {
+  if (is.null(x)) y else x
 }

@@ -7,14 +7,57 @@
 non_dominated_sort(particles)
 }
 \arguments{
-\item{particles}{列表，每个元素是包含"fitness"数值向量的粒子（如 list(fitness = c(1,2), position = ...)）。}
+\item{particles}{列表，每个元素是包含 fitness 数值向量的粒子，
+例如 list(fitness = c(1, 2), position = ...)。}
 }
 \value{
-整数向量，每个元素对应粒子的前沿等级（rank）。
+整数向量，每个元素对应粒子的前沿等级。
 }
 \description{
-对粒子群进行非支配排序，返回每个粒子的前沿等级（rank），等级1为最优前沿。
+对粒子群进行非支配排序，返回每个粒子的前沿等级（rank），
+rank = 1 表示 Pareto 最优前沿。
 }
 \details{
 非支配排序（多目标优化）
+}
+\examples{
+# Example 1: general case
+set.seed(123)
+particles <- list(
+  list(fitness = c(2, 3), position = c(0.1, 0.2)),
+  list(fitness = c(1, 2), position = c(0.3, 0.4)),
+  list(fitness = c(3, 1), position = c(0.5, 0.6)),
+  list(fitness = c(4, 5), position = c(0.7, 0.8)),
+  list(fitness = c(2, 2), position = c(0.9, 0.1)),
+  list(fitness = c(5, 6), position = c(0.2, 0.3))
+)
+
+ranks <- non_dominated_sort(particles)
+data.frame(
+  Particle = seq_along(ranks),
+  Rank = ranks,
+  Fitness = sapply(particles, function(x) paste(x$fitness, collapse = ","))
+)
+
+# Example 2: all non-dominated
+particles2 <- list(
+  list(fitness = c(1, 4)),
+  list(fitness = c(2, 3)),
+  list(fitness = c(3, 2)),
+  list(fitness = c(4, 1))
+)
+non_dominated_sort(particles2)
+
+# Example 3: single particle
+particles3 <- list(list(fitness = c(1, 2)))
+non_dominated_sort(particles3)
+
+# Example 4: three-objective case
+particles4 <- list(
+  list(fitness = c(1, 2, 3)),
+  list(fitness = c(2, 2, 2)),
+  list(fitness = c(1, 3, 4)),
+  list(fitness = c(3, 1, 2))
+)
+non_dominated_sort(particles4)
 }

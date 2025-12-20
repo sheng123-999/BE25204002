@@ -12,11 +12,39 @@ dominates(a, b)
 \item{b}{数值向量，第二个解的适应度向量。}
 }
 \value{
-逻辑值，TRUE 表示a支配b，FALSE 表示不支配。
+逻辑值，TRUE 表示 a 支配 b，FALSE 表示不支配。
 }
 \description{
-检查解a是否支配解b：a的每个目标值不大于b，且至少有一个目标值严格小于b。
+检查解 a 是否支配解 b：
+a 在所有目标上不劣于 b，且至少在一个目标上严格优于 b。
 }
 \details{
 判断向量a是否支配向量b（多目标最小化，越小越优）
+}
+\examples{
+# Example 1: a dominates b
+a <- c(2, 3)
+b <- c(3, 4)
+dominates(a, b)  # TRUE
+
+# Example 2: a equals b, no domination
+a <- c(2, 3)
+b <- c(2, 3)
+dominates(a, b)  # FALSE
+
+# Example 3: a is dominated by b
+a <- c(3, 4)
+b <- c(2, 3)
+dominates(a, b)  # FALSE
+
+# Example 4: three-objective domination
+a <- c(1, 2, 3)
+b <- c(1, 3, 4)
+dominates(a, b)  # TRUE
+
+# Example 5: different vector lengths (error handling)
+tryCatch(
+  dominates(c(1, 2), c(3)),
+  error = function(e) message(e$message)
+)
 }
